@@ -31,11 +31,11 @@ class WaterMarker():
         self.image_datum_x = math.floor((canvas_width - self.image.width()) / 2)
         self.image_datum_y = math.floor((canvas_height - self.image.height()) / 2)
 
-        canvas = tk.Canvas(block_image, bg='white', width=canvas_width, height=canvas_height)
-        canvas.create_image(self.image_datum_x, self.image_datum_y, image=self.image, anchor='nw')
-        canvas.pack()
-        canvas.bind("<Button-1>", self.clicked_canvas)
-        canvas.bind("<Motion>", self.hover_canvas)
+        self.canvas = tk.Canvas(block_image, bg='white', width=canvas_width, height=canvas_height)
+        self.canvas.create_image(self.image_datum_x, self.image_datum_y, image=self.image, anchor='nw')
+        self.canvas.pack()
+        self.canvas.bind("<Button-1>", self.clicked_canvas)
+        self.canvas.bind("<Motion>", self.hover_canvas)
     
     # key functions
     def resize_image(self, width:int, height:int): # TODO: rename this.
@@ -52,7 +52,11 @@ class WaterMarker():
         # set opaque watermark at clicked location
         x, y = event.x, event.y
         print(f"\nclicked at: x:{x}, y:{y} in canvas.")
-        self.mouse_loc_calibrate(x, y)
+        mouse_loc = self.mouse_loc_calibrate(x, y)
+        x0, y0 = mouse_loc
+        x1, y1 = mouse_loc
+        self.canvas.create_oval(x0, y0, x1, y1, fill='blue')
+        
         # TODO: add code: color a pixel at clicked location.
 
     def hover_canvas(self, event):
@@ -64,47 +68,31 @@ class WaterMarker():
 
     # temp functions
     def mouse_loc_calibrate(self, x:int, y:int):
-        # default loc is set to center of image
-        mouse_loc:tuple[int, int] = math.floor(self.image.width()/2), math.floor(self.image.height()/2)
-        
         x_min = self.image_datum_x
         y_min = self.image_datum_y
         x_max = self.image_datum_x + self.image.width()
         y_max = self.image_datum_y + self.image.height()
-        
-        
-        # TODO: [later] after add color a pixel func, determin where to put = 
         if x_max > x > x_min and y_max > y > y_min:
-            print("in canvas")
             mouse_loc = x, y
         elif x <= x_min and y <= y_min:
-            print('top left corner')
-            mouse_loc = 0, 0
+            mouse_loc = x_min, y_min
         elif x >= x_max and y <= y_min:
-            print('top right corner')
-            mouse_loc = self.image.width(), 0
+            mouse_loc = x_max, y_min
         elif x <= x_min and y >= y_max:
-            print("btm left corner")
-            mouse_loc = 0, self.image.height()
+            mouse_loc = x_min, y_max
         elif x > x_max and y >= y_max:
-            print("btm right corner")
-            mouse_loc = self.image.width(), self.image.height()
-            
-        elif x_max > x > x_min and y <= y_min:
-            print("top border")
-            mouse_loc = x, 0
-        elif x <= x_min and y_max > y > y_min:
-            print("left border")
-            mouse_loc = 0, y
-        elif x_max > x > x_min and y > y_max:
-            print("btm border")
+            mouse_loc = x_max, y_max
+        elif x_max >= x >= x_min and y <= y_min:
+            mouse_loc = x, y_min
+        elif x <= x_min and y_max >= y >= y_min:
+            mouse_loc = x_min, y
+        elif x_max >= x >= x_min and y >= y_max:
             mouse_loc = x, y_max
-        elif x > x_max and y_max > y > y_min:
-            print("right border")
+        elif x >= x_max and y_max >= y >= y_min:
             mouse_loc = x_max, y
         else:
-            raise ValueError(f"where is this? '{x}, {y}', ") #TODO: add color pixel on image code here to check = placement above.
-        print(mouse_loc)
+            raise ValueError(f"not in elif tree? '{x}, {y}', ")
+        return mouse_loc
 
         
     def cal_mark_loc(self, mark_size:tuple[int, int], image_size:tuple[int, int], mouse_loc:tuple[int, int]):
