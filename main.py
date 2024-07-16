@@ -1,17 +1,35 @@
 import tkinter as tk
+import math
 
 from tkinter import filedialog
 from PIL import ImageTk, Image
 
+# key dimensions
+canvas_width = 800
+canvas_height = 600
+
+
 def clicked_block(event):
     x, y = event.x, event.y
-    print(f"clicked at: x:{x}, y:{y} in block.")
+    print(f"\nclicked at: x:{x}, y:{y} in block.")
     position_judgement(x, y)
 
 def clicked_canvas(event):
     x, y = event.x, event.y
-    print(f"clicked at: x:{x}, y:{y} in canvas.")
+    print(f"\nclicked at: x:{x}, y:{y} in canvas.")
     position_judgement(x, y)
+
+def hover_block(event):
+    x, y = event.x, event.y
+    msg = f"hover over: x:{x}, y:{y} in block."
+    print(msg, end='')
+    print('\b' * len(msg), end='', flush=True)
+    
+def hover_canvas(event):
+    x, y = event.x, event.y
+    msg = f"hover over: x:{x}, y:{y} in canvas."
+    print(msg, end='')
+    print('\b' * len(msg), end='', flush=True)
 
 def position_judgement(x:int, y:int):
     if x <= 10 and y <= 10:
@@ -23,44 +41,35 @@ def position_judgement(x:int, y:int):
     elif x > (image.width() - 20) and y >= (image.height() - 20):
         print("btm right corner")
 
-
+def resize_image(width:int, height:int):
+    ratio:float = 1
+    if width > canvas_width or height > canvas_height:
+        ratio =  min(canvas_width / width, canvas_height / height)
+    size:tuple[int, int] = math.floor(width * ratio * 0.99), math.floor(height * ratio * 0.99)
+    # size:tuple[int, int] = math.floor(width * ratio), math.floor(height * ratio)
+    return size
+    
 window = tk.Tk()
 window.title("💧MarkIt.")
-window.minsize(width=800, height=500)
+window.minsize(width=1000, height=700)
 
-block1 = tk.LabelFrame(window, bg="brown")
-block1.config(padx=10, pady=10)
-block1.pack()
+block_image = tk.LabelFrame(window, bg="brown")
+block_image.config(padx=10, pady=10)
+block_image.pack()
 
-# attempt 1.
+image_pil = Image.open('grey_box.png')
+image_resize = image_pil.resize(resize_image(image_pil.width, image_pil.height))
+image = ImageTk.PhotoImage(image_resize)
 
-# this line *must* be after tk.Tk() is declared.
-# image = ImageTk.PhotoImage(file='grey_box.png')
-
-# print(f"x={image.width()}, y={image.height()}")
-
-# canvas = tk.Canvas(block1, bg='white')
-# canvas.pack()
-# canvas.create_image(0, 0, image=image, anchor='nw')
-# block1.bind("<Button-1>", clicked_block)
-# canvas.bind("<Button-1>", clicked_canvas)
-
-# attempt 2.
-# create canvas after getting the image's size is better.
-
-image_pil=Image.open('grey_box.png')
-
-print(image_pil.width, image_pil.height) # use this dimension to resize with in canvas
-
-image_resize=image_pil.resize((800, 600))
-image=ImageTk.PhotoImage(image_resize)
-
-print(f"x={image.width()}, y={image.height()}")
-
-canvas = tk.Canvas(block1, bg='white', width=800, height=600)
+canvas = tk.Canvas(block_image, bg='white', width=canvas_width, height=canvas_height)
+canvas.create_image(canvas_width / 2, canvas_height / 2, image=image, anchor='center')
 canvas.pack()
-canvas.create_image(0, 0, image=image, anchor='nw')
-block1.bind("<Button-1>", clicked_block)
+
+block_image.bind("<Button-1>", clicked_block)
 canvas.bind("<Button-1>", clicked_canvas)
+
+block_image.bind("<Motion>", hover_block)
+canvas.bind("<Motion>", hover_canvas)
+
 
 window.mainloop()

@@ -16,6 +16,8 @@ Icon
 # used to setup environment
 Procfile
 settings.json
+db_constructor.py
+test.py
 # ^^^ -added & named by me.
 
 # Byte-compiled / optimized / DLL files
