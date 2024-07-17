@@ -89,30 +89,35 @@ class WaterMarker():
 
     # temp functions
     def mouse_loc_calibrate(self, x:int, y:int):
-        x_min = self.image_datum_x
-        y_min = self.image_datum_y
-        x_max = self.image_datum_x + self.image.width()
-        y_max = self.image_datum_y + self.image.height()
-        if x_max > x > x_min and y_max > y > y_min:
+        x_min = self.image_datum_x + self.mark.width() / 2
+        y_min = self.image_datum_y + self.mark.height() / 2
+        x_max = self.image_datum_x + self.image.width() - self.mark.width() / 2
+        y_max = self.image_datum_y + self.image.height() - self.mark.height() / 2
+        if x_max >= x >= x_min and y_max >= y >= y_min: # in image
             mouse_loc = x, y
-        elif x <= x_min and y <= y_min:
+        elif x <= x_min and y <= y_min: # top left corner
             mouse_loc = x_min, y_min
-        elif x >= x_max and y <= y_min:
+        elif x >= x_max and y <= y_min: # top right corner
             mouse_loc = x_max, y_min
-        elif x <= x_min and y >= y_max:
+        elif x <= x_min and y >= y_max: # btm left corner
             mouse_loc = x_min, y_max
-        elif x > x_max and y >= y_max:
+        elif x >= x_max and y >= y_max: # btm right corner
             mouse_loc = x_max, y_max
-        elif x_max >= x >= x_min and y <= y_min:
+        elif x_max >= x >= x_min and y <= y_min: # top border
             mouse_loc = x, y_min
-        elif x <= x_min and y_max >= y >= y_min:
-            mouse_loc = x_min, y
-        elif x_max >= x >= x_min and y >= y_max:
+        elif x_max >= x >= x_min and y >= y_max: # btm border
             mouse_loc = x, y_max
-        elif x >= x_max and y_max >= y >= y_min:
+        elif x <= x_min and y_max >= y >= y_min: # left border
+            mouse_loc = x_min, y
+        elif x >= x_max and y_max >= y >= y_min: # right border
             mouse_loc = x_max, y
         else:
-            raise ValueError(f"not in elif tree? '{x}, {y}', ")
+            raise ValueError(f"mind blown, clicked at (x:{x}, y:{y}), not in elif tree?\n\
+                image size: ({self.image.width()}x{self.image.height()})\n\
+                datum at (x:{self.image_datum_x}, y:{self.image_datum_y})\n\
+                x min max: {x_min}, {x_max}\n\
+                y min max: {y_min}, {y_max}\n\
+                never thought this will occur, add any missed info to mouse_loc_calibrate().")
         return mouse_loc
 
         
