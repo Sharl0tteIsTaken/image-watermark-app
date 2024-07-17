@@ -34,31 +34,46 @@ class WaterMarker():
         
         self.image_datum_x = math.floor((canvas_width - self.image.width()) / 2)
         self.image_datum_y = math.floor((canvas_height - self.image.height()) / 2)
-
-        self.canvas = tk.Canvas(block_image, bg='white', width=canvas_width, height=canvas_height)
+        
+        self.canvas = tk.Canvas(block_image, bg='white', width=canvas_width, height=canvas_height, border=0)
         self.canvas.create_image(self.image_datum_x, self.image_datum_y, image=self.image, anchor='nw')
         self.canvas.pack()
         
+        x_min = self.image_datum_x
+        y_min = self.image_datum_y
+        x_max = self.image_datum_x + self.image.width() - 1
+        y_max = self.image_datum_y + self.image.height() - 2
+        print(f"datum (x:{x_min}, y:{y_min})")
+        print(f"farnd (x:{x_max}, y:{y_max})")
+        print(f"image ({self.image.width()}x{self.image.height()})")
         
-        self.window.bind("<Button-1>", self.clicked_canvas)
-        self.window.bind("<Motion>", self.hover_canvas)
+        self.canvas.create_oval(x_min, y_min, x_min, y_min, fill='red')
+        self.canvas.create_oval(x_min, y_max, x_min, y_max, fill='blue')
+        self.canvas.create_oval(x_max, y_min, x_max, y_min, fill='green')
+        self.canvas.create_oval(x_max, y_max, x_max, y_max, fill='orange')
         
-        # TODO: make this into a function: setup_mark_place() bind with a button
+        
+        self.canvas.bind("<Button-1>", self.clicked_canvas)
+        self.canvas.bind("<Motion>", self.hover_canvas)
+        
+        # TODO: make this into a function: load_image() -> watermark_in_canvas() bind with a button
         mark_pil = Image.open('watermark.png')
         mark_resize = mark_pil.resize(self.resize_mark(mark_pil.width, mark_pil.height))
         self.mark = ImageTk.PhotoImage(mark_resize)
+        self.mark_offset_x_min = math.floor(self.mark.width() / 2)
+        self.mark_offset_y_min = math.floor(self.mark.height() / 2)
+        self.mark_offset_x_max = self.mark.width() - self.mark_offset_x_min
+        self.mark_offset_y_max = self.mark.height() - self.mark_offset_y_min
         
-        # self.watermark_place = tk.Label(self.canvas, image=self.mark) # type: ignore
-        # self.watermark_place.config(border=0)
+        print(f"mark ({self.mark.width()}x{self.mark.height()})")
+
     
-        # TODO: make this into a function: setup_mark_preview()
+        # TODO: make this into a function: load_image() -> preview_in_canvas()
         ghost_pil = Image.open('watermark.png')
         ghost_resize = ghost_pil.resize(self.resize_mark(ghost_pil.width, ghost_pil.height))
         ghost_resize.putalpha(128)
         self.ghost = ImageTk.PhotoImage(ghost_resize)
-        
-        # self.watermark_preview = tk.Label(self.canvas, image=self.ghost) # type: ignore
-        # self.watermark_preview.config(border=0)
+
     
     # key functions
     def operate(self):
@@ -85,12 +100,10 @@ class WaterMarker():
         x, y = event.x, event.y
         print(f"\nclicked at: x:{x}, y:{y} in canvas.")
         mouse_loc = self.mouse_loc_calibrate(x, y)
-        x = mouse_loc[0] - math.floor(self.mark.width() / 2) #+ math.floor((window_width - canvas_width) / 2)
-        y = mouse_loc[1] - math.floor(self.mark.height() / 2)
+        x = mouse_loc[0] - self.mark_offset_x_min #+ math.floor((window_width - canvas_width) / 2)
+        y = mouse_loc[1] - self.mark_offset_y_min
         print(f"placed mark at x:{x}, y:{y}")
         self.watermark = self.canvas.create_image(x, y, image=self.mark, anchor='nw')
-
-
 
     def hover_canvas(self, event):
         # set translucent watermark at hover location
@@ -98,13 +111,10 @@ class WaterMarker():
             self.canvas.delete(self.watermark_preview)
         except AttributeError:
             print("first time only AttributeError, no worries.")
-        
         x, y = event.x, event.y
         mouse_loc = self.mouse_loc_calibrate(x, y)
-        x = mouse_loc[0] - math.floor(self.mark.width() / 2) #+ math.floor((window_width - canvas_width) / 2)
-        y = mouse_loc[1] - math.floor(self.mark.height() / 2)
-
-
+        x = mouse_loc[0] - self.mark_offset_x_min
+        y = mouse_loc[1] - self.mark_offset_y_min
         self.watermark_preview = self.canvas.create_image(x, y, image=self.ghost, anchor='nw')
 
         msg = f"hover over: x:{x}, y:{y} in canvas."
@@ -113,23 +123,25 @@ class WaterMarker():
 
     # temp functions
     def mouse_loc_calibrate(self, x:int, y:int):
-        x_min = self.image_datum_x + self.mark.width() / 2
-        y_min = self.image_datum_y + self.mark.height() / 2
-        x_max = self.image_datum_x + self.image.width() - self.mark.width() / 2
-        y_max = self.image_datum_y + self.image.height() - self.mark.height() / 2
+        x_min = self.image_datum_x + self.mark_offset_x_min
+        y_min = self.image_datum_y + self.mark_offset_y_min
+        x_max = self.image_datum_x + self.image.width() - self.mark_offset_x_max
+        y_max = self.image_datum_y + self.image.height() - self.mark_offset_y_max
+
+        # print(x_min, y_min, x_max, y_max)
         if x_max >= x >= x_min and y_max >= y >= y_min: # in image
             mouse_loc = x, y
         elif x <= x_min and y <= y_min: # top left corner
             mouse_loc = x_min, y_min
         elif x >= x_max and y <= y_min: # top right corner
             mouse_loc = x_max, y_min
-        elif x <= x_min and y >= y_max: # btn left corner
+        elif x <= x_min and y >= y_max: # btm left corner
             mouse_loc = x_min, y_max
-        elif x >= x_max and y >= y_max: # btn right corner
+        elif x >= x_max and y >= y_max: # btm right corner
             mouse_loc = x_max, y_max
         elif x_max >= x >= x_min and y <= y_min: # top border
             mouse_loc = x, y_min
-        elif x_max >= x >= x_min and y >= y_max: # btn border
+        elif x_max >= x >= x_min and y >= y_max: # btm border
             mouse_loc = x, y_max
         elif x <= x_min and y_max >= y >= y_min: # left border
             mouse_loc = x_min, y
