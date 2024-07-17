@@ -2,7 +2,7 @@ import tkinter as tk
 import math
 
 from tkinter import filedialog
-from PIL import ImageTk, Image
+from PIL import ImageTk, Image, ImageDraw
 
 # key dimensions
 window_width = 1000
@@ -38,15 +38,27 @@ class WaterMarker():
         self.canvas = tk.Canvas(block_image, bg='white', width=canvas_width, height=canvas_height)
         self.canvas.create_image(self.image_datum_x, self.image_datum_y, image=self.image, anchor='nw')
         self.canvas.pack()
-        self.canvas.bind("<Button-1>", self.clicked_canvas)
-        self.canvas.bind("<Motion>", self.hover_canvas)
         
-        # TODO: make this into a function bind with a button
+        
+        self.window.bind("<Button-1>", self.clicked_canvas)
+        self.window.bind("<Motion>", self.hover_canvas)
+        
+        # TODO: make this into a function: setup_mark_place() bind with a button
         mark_pil = Image.open('watermark.png')
-        mark_resize = mark_pil.resize(self.resize_mark(image_pil.width, image_pil.height))
+        mark_resize = mark_pil.resize(self.resize_mark(mark_pil.width, mark_pil.height))
         self.mark = ImageTk.PhotoImage(mark_resize)
-        self.watermark_lbl = tk.Label(self.canvas, image=self.mark) # type: ignore
-        self.watermark_lbl.config(border=0)
+        
+        # self.watermark_place = tk.Label(self.canvas, image=self.mark) # type: ignore
+        # self.watermark_place.config(border=0)
+    
+        # TODO: make this into a function: setup_mark_preview()
+        ghost_pil = Image.open('watermark.png')
+        ghost_resize = ghost_pil.resize(self.resize_mark(ghost_pil.width, ghost_pil.height))
+        ghost_resize.putalpha(128)
+        self.ghost = ImageTk.PhotoImage(ghost_resize)
+        
+        # self.watermark_preview = tk.Label(self.canvas, image=self.ghost) # type: ignore
+        # self.watermark_preview.config(border=0)
     
     # key functions
     def operate(self):
@@ -64,25 +76,37 @@ class WaterMarker():
     
     # mouse location functions
     def clicked_canvas(self, event):
-        # set opaque watermark at clicked location
+        # TODO: make sure // doesn't cause watermark to miss align a pixel or 2
+        try:
+            self.canvas.delete(self.watermark)
+        except AttributeError:
+            print("first time only AttributeError, no worries.")
+            
         x, y = event.x, event.y
         print(f"\nclicked at: x:{x}, y:{y} in canvas.")
         mouse_loc = self.mouse_loc_calibrate(x, y)
-        # x0, y0 = mouse_loc
-        # x1, y1 = mouse_loc
-        # self.canvas.create_oval(x0, y0, x1, y1, fill='blue')
-        
-        
-        
         x = mouse_loc[0] - math.floor(self.mark.width() / 2) #+ math.floor((window_width - canvas_width) / 2)
         y = mouse_loc[1] - math.floor(self.mark.height() / 2)
         print(f"placed mark at x:{x}, y:{y}")
-        self.watermark_lbl.place(x=x, y=y)
+        self.watermark = self.canvas.create_image(x, y, image=self.mark, anchor='nw')
+
 
 
     def hover_canvas(self, event):
         # set translucent watermark at hover location
+        try:
+            self.canvas.delete(self.watermark_preview)
+        except AttributeError:
+            print("first time only AttributeError, no worries.")
+        
         x, y = event.x, event.y
+        mouse_loc = self.mouse_loc_calibrate(x, y)
+        x = mouse_loc[0] - math.floor(self.mark.width() / 2) #+ math.floor((window_width - canvas_width) / 2)
+        y = mouse_loc[1] - math.floor(self.mark.height() / 2)
+
+
+        self.watermark_preview = self.canvas.create_image(x, y, image=self.ghost, anchor='nw')
+
         msg = f"hover over: x:{x}, y:{y} in canvas."
         print(msg, end='')
         print('\b' * len(msg), end='', flush=True)
@@ -99,13 +123,13 @@ class WaterMarker():
             mouse_loc = x_min, y_min
         elif x >= x_max and y <= y_min: # top right corner
             mouse_loc = x_max, y_min
-        elif x <= x_min and y >= y_max: # btm left corner
+        elif x <= x_min and y >= y_max: # btn left corner
             mouse_loc = x_min, y_max
-        elif x >= x_max and y >= y_max: # btm right corner
+        elif x >= x_max and y >= y_max: # btn right corner
             mouse_loc = x_max, y_max
         elif x_max >= x >= x_min and y <= y_min: # top border
             mouse_loc = x, y_min
-        elif x_max >= x >= x_min and y >= y_max: # btm border
+        elif x_max >= x >= x_min and y >= y_max: # btn border
             mouse_loc = x, y_max
         elif x <= x_min and y_max >= y >= y_min: # left border
             mouse_loc = x_min, y
