@@ -7,10 +7,13 @@ from PIL import ImageTk, Image
 # key dimensions
 window_width = 1000
 window_height = 700
-canvas_width = 820
-canvas_height = 620
-canvas_padx = 10
-canvas_pady = 10
+canvas_width = 860
+canvas_height = 660
+canvas_padx = 30
+canvas_pady = 30
+mark_width = 50
+mark_height = 50
+
 
 
 class WaterMarker():
@@ -18,6 +21,7 @@ class WaterMarker():
         self.window = tk.Tk()
         self.window.title("💧MarkIt.")
         self.window.minsize(width=window_width, height=window_height)
+        self.window.resizable(width=False, height=False)
 
         block_image = tk.LabelFrame(self.window, bg="brown")
         block_image.config()
@@ -36,28 +40,45 @@ class WaterMarker():
         self.canvas.pack()
         self.canvas.bind("<Button-1>", self.clicked_canvas)
         self.canvas.bind("<Motion>", self.hover_canvas)
+        
+        # TODO: make this into a function bind with a button
+        mark_pil = Image.open('watermark.png')
+        mark_resize = mark_pil.resize(self.resize_mark(image_pil.width, image_pil.height))
+        self.mark = ImageTk.PhotoImage(mark_resize)
+        self.watermark_lbl = tk.Label(self.canvas, image=self.mark) # type: ignore
+        self.watermark_lbl.config(border=0)
     
     # key functions
-    def resize_image(self, width:int, height:int): # TODO: rename this.
-        ratio:float =  min((canvas_width - canvas_padx * 2) / width, (canvas_height - canvas_pady * 2) / height) 
-        size:tuple[int, int] = math.floor(width * ratio * 0.99), math.floor(height * ratio * 0.99)
-        # size:tuple[int, int] = math.floor(width * ratio), math.floor(height * ratio)
-        return size
-    
     def operate(self):
         self.window.mainloop()
         
+    def resize_image(self, width:int, height:int): # TODO: rename this.
+        ratio:float =  min((canvas_width - canvas_padx * 2) / width, (canvas_height - canvas_pady * 2) / height) 
+        size:tuple[int, int] = math.floor(width * ratio), math.floor(height * ratio)
+        return size
+    
+    def resize_mark(self, width:int, height:int):
+        ratio:float =  min(mark_width/width, mark_height/height) 
+        size:tuple[int, int] = math.floor(width * ratio), math.floor(height * ratio)
+        return size
+    
     # mouse location functions
     def clicked_canvas(self, event):
         # set opaque watermark at clicked location
         x, y = event.x, event.y
         print(f"\nclicked at: x:{x}, y:{y} in canvas.")
         mouse_loc = self.mouse_loc_calibrate(x, y)
-        x0, y0 = mouse_loc
-        x1, y1 = mouse_loc
-        self.canvas.create_oval(x0, y0, x1, y1, fill='blue')
+        # x0, y0 = mouse_loc
+        # x1, y1 = mouse_loc
+        # self.canvas.create_oval(x0, y0, x1, y1, fill='blue')
         
-        # TODO: add code: color a pixel at clicked location.
+        
+        
+        x = mouse_loc[0] - math.floor(self.mark.width() / 2) #+ math.floor((window_width - canvas_width) / 2)
+        y = mouse_loc[1] - math.floor(self.mark.height() / 2)
+        print(f"placed mark at x:{x}, y:{y}")
+        self.watermark_lbl.place(x=x, y=y)
+
 
     def hover_canvas(self, event):
         # set translucent watermark at hover location
