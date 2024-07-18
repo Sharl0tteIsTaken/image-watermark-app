@@ -47,14 +47,14 @@ class WaterMarker():
 
         image_pil = Image.open('assets/img/default_image.png')
         image_resize = image_pil.resize(self.size_calculate(image_pil.width, image_pil.height, type='image'))
-        default_image = ImageTk.PhotoImage(image_resize)
-        self.canvas.create_image(canvas_width/2, canvas_height/2, image=default_image, anchor='center')
+        self.default_image = ImageTk.PhotoImage(image_resize)
+        self.canvas.create_image(canvas_width/2, canvas_height/2, image=self.default_image, anchor='center')
         # self.canvas_image_default = 
 
     def load_image(self):
         
-        image_pil = Image.open('assets/img/grey_box.png')
-        # image_pil = Image.open(filedialog.askopenfilename())
+        # image_pil = Image.open('assets/img/grey_box.png')
+        image_pil = Image.open(filedialog.askopenfilename())
         image_resize = image_pil.resize(self.size_calculate(image_pil.width, image_pil.height, type='image'))
         self.image = ImageTk.PhotoImage(image_resize)
         
