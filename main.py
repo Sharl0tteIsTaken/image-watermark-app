@@ -24,6 +24,7 @@ class WaterMarker():
         self.window.option_add("*Font", default_font)
         self.window.config(background="white")
         
+        self.setup_variable()
         self.setup_labelframe()
         self.setup_widget()
 
@@ -44,19 +45,49 @@ class WaterMarker():
         
         self.btn_open_mark = tk.Button(self.block_panel, text="watermark", command=self.load_mark)
         self.btn_open_mark.grid(column=1, row=0)
-
-        image_pil = Image.open('assets/img/default_image.png')
-        image_resize = image_pil.resize(self.size_calculate(image_pil.width, image_pil.height, type='image'))
-        self.default_image = ImageTk.PhotoImage(image_resize)
+        
+        self.default_image = self.proper_load(filepath='assets/img/default_image.png', type='image')
         self.canvas.create_image(canvas_width/2, canvas_height/2, image=self.default_image, anchor='center')
         # self.canvas_image_default = 
+        
+        
+        self.switch_r = self.proper_load(filepath="assets/img/switch-right.png", type='image', max_size=(100,50))
+        self.switch_l = self.proper_load(filepath="assets/img/switch-left.png", type='image', max_size=(100,50))
 
+        self.btn_switch = tk.Button(self.block_panel, image=self.switch_r, command=self.switch_button) # type: ignore
+        self.btn_switch.grid(column=2, row=0)
+        
+        self.entry_text = tk.Entry(self.block_panel, textvariable=self.user_enter_text)
+        self.entry_text.bind("<Button-1>", self.entry_action)
+        self.entry_text.grid(column=3, row=0)
+        
+        
+    
+    def setup_variable(self):
+        self.user_enter_text = tk.StringVar()
+        self.user_enter_text.set("enter watermark")
+        
+        self.switch_state = True # image
+        
+
+    # key functions
+    def operate(self):
+        self.window.mainloop()
+        
+    def proper_load(self, *, filepath:str, type:str, alpha:int|None=None, max_size:tuple[int,int]|None=None):
+        image_pil = Image.open(filepath)
+        if max_size:
+            image_resize = image_pil.resize((max_size[0], max_size[1]))
+        else:
+            image_resize = image_pil.resize(self.size_calculate(image_pil.width, image_pil.height, type=type))
+        if alpha:
+            image_resize.putalpha(alpha)
+        return ImageTk.PhotoImage(image_resize)
+    
     def load_image(self):
         
-        # image_pil = Image.open('assets/img/grey_box.png')
-        image_pil = Image.open(filedialog.askopenfilename())
-        image_resize = image_pil.resize(self.size_calculate(image_pil.width, image_pil.height, type='image'))
-        self.image = ImageTk.PhotoImage(image_resize)
+        self.image = self.proper_load(filepath='assets/img/grey_box.png', type='image')
+        # self.image = self.proper_load(filepath=filedialog.askopenfilename(), type='image')
         
         # calculate where datum's(top left corner of image) position will be in the canvas.
         self.image_datum_x = math.floor((canvas_width - self.image.width()) / 2)
@@ -67,30 +98,35 @@ class WaterMarker():
                 
     def load_mark(self):
         # load watermark
-        mark_pil = Image.open('assets/img/watermark.png')
-        # mark_pil = Image.open(filedialog.askopenfilename())
-        mark_resize = mark_pil.resize(self.size_calculate(mark_pil.width, mark_pil.height, type='mark'))
-        self.mark = ImageTk.PhotoImage(mark_resize)
+        self.mark = self.proper_load(filepath='assets/img/watermark.png', type='mark')
+        # self.mark = self.proper_load(filepath=filedialog.askopenfilename(), type='mark')
+
         self.mark_offset_x_min = math.floor(self.mark.width() / 2)
         self.mark_offset_y_min = math.floor(self.mark.height() / 2)
         self.mark_offset_x_max = self.mark.width() - self.mark_offset_x_min
         self.mark_offset_y_max = self.mark.height() - self.mark_offset_y_min
 
         # set preview of watermark
-        ghost_pil = Image.open('assets/img/watermark.png')
-        ghost_resize = ghost_pil.resize(self.size_calculate(ghost_pil.width, ghost_pil.height, type='mark'))
-        ghost_resize.putalpha(128)
-        self.ghost = ImageTk.PhotoImage(ghost_resize)
-        
+        self.ghost = self.proper_load(filepath='assets/img/watermark.png', type='mark', alpha=128)
+        # self.mark = self.proper_load(filepath=filedialog.askopenfilename(), type='mark')
+
         # bind actions on canvas to function.
         self.canvas.bind("<Button-1>", lambda event: self.canvas_action(event, method='clicked'))
         self.canvas.bind("<Motion>", lambda event: self.canvas_action(event, method='motion'))
         self.canvas.focus_set()
-
-    # key functions
-    def operate(self):
-        self.window.mainloop()
         
+    def load_text(self):
+        text = self.entry_text.get()
+        # self.canvas.create_text()
+        
+    def switch_button(self):
+        if self.switch_state:
+            self.btn_switch.config(image=self.switch_l) # type: ignore
+        else:
+            self.btn_switch.config(image=self.switch_r) # type: ignore
+        self.switch_state = not self.switch_state
+    
+    # support functions
     def size_calculate(self, width:int, height:int, *, type:str):
         if type == 'image':
             ratio:float =  min((canvas_width - canvas_padx * 2) / width, (canvas_height - canvas_pady * 2) / height) 
@@ -139,6 +175,7 @@ class WaterMarker():
     def canvas_action(self, event, *, method:str):
         x0, y0 = event.x, event.y
         x, y = self.mouse_loc_calibrate(x0, y0)
+        self.mark_position:tuple[int, int] = x, y
         if method == 'clicked':
             try:
                 self.canvas.delete(self.watermark)
@@ -154,6 +191,10 @@ class WaterMarker():
             finally:
                 self.watermark_preview = self.canvas.create_image(x, y, image=self.ghost, anchor='nw')
         
+    def entry_action(self, event):
+        # event.widget.bind(0, tk.END)
+        self.user_enter_text.set("")
+        self.entry_text.unbind("<Button-1>")
             
 wm = WaterMarker()
 wm.operate()
