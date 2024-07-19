@@ -27,6 +27,8 @@ class WaterMarker():
         self.setup_variable()
         self.setup_labelframe()
         self.setup_widget()
+        
+        self.text_size_calculate()
 
     def setup_labelframe(self):
         self.block_image = tk.LabelFrame(self.window, bg="white")
@@ -58,17 +60,17 @@ class WaterMarker():
         self.btn_switch.grid(column=2, row=0)
         
         self.entry_text = tk.Entry(self.block_panel, textvariable=self.user_enter_text)
-        self.entry_text.bind("<Button-1>", self.entry_action)
+        self.entry_text.bind("<Button-1>", self.remove_default_text)
         self.entry_text.grid(column=3, row=0)
         
-        
-    
     def setup_variable(self):
         self.user_enter_text = tk.StringVar()
-        self.user_enter_text.set("enter watermark")
+        self.user_enter_text.set("enter text as watermark")
         
         self.switch_state = True # image
-        
+        self.exist_image = False
+        self.exist_mark = False
+        self.text_calibrate = True
 
     # key functions
     def operate(self):
@@ -79,7 +81,7 @@ class WaterMarker():
         if max_size:
             image_resize = image_pil.resize((max_size[0], max_size[1]))
         else:
-            image_resize = image_pil.resize(self.size_calculate(image_pil.width, image_pil.height, type=type))
+            image_resize = image_pil.resize(self.image_size_calculate(image_pil.width, image_pil.height, type=type))
         if alpha:
             image_resize.putalpha(alpha)
         return ImageTk.PhotoImage(image_resize)
@@ -95,30 +97,47 @@ class WaterMarker():
         
         # create image in canvas position at datum.
         self.canvas.create_image(self.image_datum_x, self.image_datum_y, image=self.image, anchor='nw')
-                
+        self.exist_image = True
+        
+        self.update_canvas_bind()
+        
+        
     def load_mark(self):
         # load watermark
         self.mark = self.proper_load(filepath='assets/img/watermark.png', type='mark')
         # self.mark = self.proper_load(filepath=filedialog.askopenfilename(), type='mark')
 
-        self.mark_offset_x_min = math.floor(self.mark.width() / 2)
-        self.mark_offset_y_min = math.floor(self.mark.height() / 2)
-        self.mark_offset_x_max = self.mark.width() - self.mark_offset_x_min
-        self.mark_offset_y_max = self.mark.height() - self.mark_offset_y_min
-
         # set preview of watermark
         self.ghost = self.proper_load(filepath='assets/img/watermark.png', type='mark', alpha=128)
         # self.mark = self.proper_load(filepath=filedialog.askopenfilename(), type='mark')
-
+        
+        self.exist_mark = True
+        self.update_mark_offset(type='image')
+        self.update_canvas_bind()
+        
+    def update_mark_offset(self, type:str, bbox:tuple[int,int,int,int]|None=None):
+        if type == 'image':
+            self.mark_offset_x_min = math.floor(self.mark.width() / 2)
+            self.mark_offset_y_min = math.floor(self.mark.height() / 2)
+            self.mark_offset_x_max = self.mark.width() - self.mark_offset_x_min
+            self.mark_offset_y_max = self.mark.height() - self.mark_offset_y_min
+        elif type == 'text':
+            assert bbox
+            self.text_width = bbox[2] - bbox[0] # type: ignore
+            self.text_height = bbox[3] - bbox[1] # type: ignore
+            
+            self.text_offset_x_min = math.floor(self.text_width / 2)
+            self.text_offset_y_min = math.floor((self.text_height) / 2)
+            self.text_offset_x_max = self.text_width - self.text_offset_x_min
+            self.text_offset_y_max = self.text_height - self.text_offset_y_min
+            
+    def update_canvas_bind(self):
+        if self.exist_mark and self.exist_image:
         # bind actions on canvas to function.
-        self.canvas.bind("<Button-1>", lambda event: self.canvas_action(event, method='clicked'))
-        self.canvas.bind("<Motion>", lambda event: self.canvas_action(event, method='motion'))
-        self.canvas.focus_set()
-        
-    def load_text(self):
-        text = self.entry_text.get()
-        # self.canvas.create_text()
-        
+            self.canvas.bind("<Button-1>", lambda event: self.canvas_action(event, method='clicked'))
+            self.canvas.bind("<Motion>", lambda event: self.canvas_action(event, method='motion'))
+            self.canvas.focus_set()
+                
     def switch_button(self):
         if self.switch_state:
             self.btn_switch.config(image=self.switch_l) # type: ignore
@@ -126,8 +145,21 @@ class WaterMarker():
             self.btn_switch.config(image=self.switch_r) # type: ignore
         self.switch_state = not self.switch_state
     
+    def remove_default_text(self, event):
+        self.user_enter_text.set("")
+        self.entry_text.bind("<Button-1>", self.entry_action)
+        
+    def entry_action(self, event):
+        self.text_calibrate = False
+        self.exist_mark = False
+        # self.text_changed()
+    
+    def text_changed(self):
+        # TODO: [later] if not in need delete this.
+        self.text_calibrate = False
+    
     # support functions
-    def size_calculate(self, width:int, height:int, *, type:str):
+    def image_size_calculate(self, width:int, height:int, *, type:str):
         if type == 'image':
             ratio:float =  min((canvas_width - canvas_padx * 2) / width, (canvas_height - canvas_pady * 2) / height) 
         elif type == 'mark' or type == 'watermark':
@@ -137,11 +169,29 @@ class WaterMarker():
         size:tuple[int, int] = math.floor(width * ratio), math.floor(height * ratio)
         return size
     
+    def text_size_calculate(self):
+        calibrate_text = self.canvas.create_text(canvas_width/2, canvas_height/2, text=self.entry_text.get(), font=default_font, anchor='nw') # TODO: get font from UI
+        bbox = self.canvas.bbox(calibrate_text)
+        
+        self.text_width = bbox[2] - bbox[0] # type: ignore
+        self.text_height = bbox[3] - bbox[1] # type: ignore
+
+        self.update_mark_offset(type='text', bbox=bbox)
+        self.canvas.delete(calibrate_text)
+        self.exist_mark = True
+    
     def mouse_loc_calibrate(self, x:int, y:int):
-        x_min = self.image_datum_x + self.mark_offset_x_min
-        y_min = self.image_datum_y + self.mark_offset_y_min
-        x_max = self.image_datum_x + self.image.width() - self.mark_offset_x_max
-        y_max = self.image_datum_y + self.image.height() - self.mark_offset_y_max
+        if self.switch_state: # image
+            x_min = self.image_datum_x + self.mark_offset_x_min
+            y_min = self.image_datum_y + self.mark_offset_y_min
+            x_max = self.image_datum_x + self.image.width() - self.mark_offset_x_max
+            y_max = self.image_datum_y + self.image.height() - self.mark_offset_y_max
+        else: # text
+            x_min = self.image_datum_x + self.text_offset_x_min
+            y_min = self.image_datum_y + self.text_offset_y_min
+            x_max = self.image_datum_x + self.image.width() - self.text_offset_x_max
+            y_max = self.image_datum_y + self.image.height() - self.text_offset_y_max
+            
         if x_max >= x >= x_min and y_max >= y >= y_min: # in image
             mouse_loc = x, y
         elif x <= x_min and y <= y_min: # top left corner
@@ -167,34 +217,56 @@ class WaterMarker():
                 x min max: {x_min}, {x_max}\n\
                 y min max: {y_min}, {y_max}\n\
                 never thought this will occur, add any missed info to mouse_loc_calibrate().")
-        x_calibrate = mouse_loc[0] - self.mark_offset_x_min
-        y_calibrate = mouse_loc[1] - self.mark_offset_y_min
+        if self.switch_state: # image
+            x_calibrate = mouse_loc[0] - self.mark_offset_x_min
+            y_calibrate = mouse_loc[1] - self.mark_offset_y_min
+        else: # text
+            x_calibrate = mouse_loc[0] - self.text_offset_x_min
+            y_calibrate = mouse_loc[1] - self.text_offset_y_min
         return x_calibrate, y_calibrate
     
     # mouse location
     def canvas_action(self, event, *, method:str):
+        # TODO: break down this func
         x0, y0 = event.x, event.y
-        x, y = self.mouse_loc_calibrate(x0, y0)
-        self.mark_position:tuple[int, int] = x, y
-        if method == 'clicked':
-            try:
-                self.canvas.delete(self.watermark)
-            except AttributeError:
-                print("first time only AttributeError, no worries.")
-            finally:
-                self.watermark = self.canvas.create_image(x, y, image=self.mark, anchor='nw')
-        elif method == 'motion':
-            try:
-                self.canvas.delete(self.watermark_preview)
-            except AttributeError:
-                print("first time only AttributeError, no worries.")
-            finally:
-                self.watermark_preview = self.canvas.create_image(x, y, image=self.ghost, anchor='nw')
-        
-    def entry_action(self, event):
-        # event.widget.bind(0, tk.END)
-        self.user_enter_text.set("")
-        self.entry_text.unbind("<Button-1>")
+        if self.switch_state: # image
+            x, y = self.mouse_loc_calibrate(x0, y0)
+            if method == 'clicked':
+                try:
+                    self.canvas.delete(self.watermark_image)
+                except AttributeError:
+                    print("first time only AttributeError, no worries.")
+                finally:
+                    self.watermark_image = self.canvas.create_image(x, y, image=self.mark, anchor='nw')
+                    self.mark_position:tuple[int, int] = x, y
+            elif method == 'motion':
+                try:
+                    self.canvas.delete(self.watermark_image_preview)
+                except AttributeError:
+                    print("first time only AttributeError, no worries.")
+                finally:
+                    self.watermark_image_preview = self.canvas.create_image(x, y, image=self.ghost, anchor='nw')
+        else: # text
+            if not self.text_calibrate:
+                self.text_size_calculate()
+            x, y = self.mouse_loc_calibrate(x0, y0)
+            if method == 'clicked':
+                try:
+                    self.canvas.delete(self.watermark_text)
+                except AttributeError:
+                    print("first time only AttributeError, no worries.")
+                finally:
+                    self.watermark_text = self.canvas.create_text(x, y, text=self.entry_text.get(), font=default_font, anchor='nw')
+                    self.mark_position:tuple[int, int] = x, y
+            elif method == 'motion':
+                try:
+                    self.canvas.delete(self.watermark_text_preview)
+                except AttributeError:
+                    print("first time only AttributeError, no worries.")
+                finally:
+                    self.watermark_text_preview = self.canvas.create_text(x, y, text=self.entry_text.get(), font=default_font, anchor='nw')
+
+    
             
 wm = WaterMarker()
 wm.operate()
