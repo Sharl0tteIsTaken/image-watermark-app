@@ -105,7 +105,7 @@ class WaterMarker():
         # TODO: [later] add QOL update so that if user forgot to confirm change it'll still update, make it a force update
         
         
-    def setup_variable(self):
+    def setup_variable(self) -> None:
         """
         create every variable for widgets.
         
@@ -115,7 +115,7 @@ class WaterMarker():
         self.user_enter_text = tk.StringVar()
         self.user_enter_text.set("enter text as watermark")
         
-    def setup_attribute(self):
+    def setup_attribute(self) -> None:
         """
         create every attribute for other functions.
         
@@ -131,10 +131,34 @@ class WaterMarker():
         self.text_calibrate = True
     
     # key functions
-    def operate(self):
+    def operate(self) -> None:
+        """
+        the power button.
+        """
         self.window.mainloop()
         
-    def proper_load(self, *, filepath:str, type:str, alpha:int|None=None, max_size:tuple[int,int]|None=None):
+    def proper_load(
+        self, 
+        *, 
+        filepath:str, 
+        type:str, 
+        alpha:int|None=None, 
+        max_size:tuple[int,int]|None=None
+        ) -> ImageTk.PhotoImage:
+        """
+        load image from filepath to Image to PhotoImage, 
+        adjust image alpha and image size of desired.
+        stores Image in self.source_
+
+        Args:
+            filepath (str): file path of the loading image.
+            type (str): type of loading image, 'image' or 'mark'.
+            alpha (int | None, optional): add translucent to the image, range 0 ~ 255, translucent % = (alpha/255). Defaults to None.
+            max_size (tuple[int,int] | None, optional): set max size of the image, image will be scale up to width and/or height specified. Defaults to None.
+
+        Returns:
+            ImageTk.PhotoImage: the image specified.
+        """
         image_pil = Image.open(filepath)
         if type == 'image':
             self.source_image = image_pil
@@ -148,7 +172,11 @@ class WaterMarker():
             image_resize.putalpha(alpha)
         return ImageTk.PhotoImage(image_resize)
     
-    def load_image(self):
+    def load_image(self) -> None:
+        """
+        ask user filepath to load image,
+        create the image on canvas and remove default(place holder) image.
+        """
         self.image = self.proper_load(filepath='assets/img/checkboard_color.png', type='image')
         # self.image = self.proper_load(filepath=filedialog.askopenfilename(), type='image')
         
@@ -165,7 +193,12 @@ class WaterMarker():
         
         self.update_canvas_bind()
         
-    def load_mark(self):
+    def load_mark(self) -> None:
+        """
+        ask user filepath to load watermark,
+        bind canvas with user action,
+        calls to update watermark offset.
+        """
         # load watermark
         self.mark = self.proper_load(filepath='assets/img/watermark.png', type='mark')
         # self.mark = self.proper_load(filepath=filedialog.askopenfilename(), type='mark')
@@ -178,14 +211,26 @@ class WaterMarker():
         self.update_mark_offset(type='image')
         self.update_canvas_bind()
         
-    def update_canvas_bind(self):
+    def update_canvas_bind(self) -> None:
+        """
+        if both watermark and image exist,
+        bind M1 and mouse motion with function:self.canvas_action,
+        set focus to canvas.
+        """
         if self.exist_mark and self.exist_image:
         # bind actions on canvas to function.
             self.canvas.bind("<Button-1>", lambda event: self.canvas_action(event, method='clicked'))
             self.canvas.bind("<Motion>", lambda event: self.canvas_action(event, method='motion'))
             self.canvas.focus_set()
         
-    def update_mark_offset(self, type:str, bbox:tuple[int,int,int,int]|None=None):
+    def update_mark_offset(self, type:str, bbox:tuple[int,int,int,int]|None=None) -> None:
+        """
+        update watermark offset from user click position to top left corner of the watermark.
+
+        Args:
+            type (str): type of watermark, 'image' or 'text'.
+            bbox (tuple[int,int,int,int] | None, optional): the border box of the watermark(text) on canvas. Defaults to None.
+        """
         if type == 'image':
             self.mark_offset_x_min = math.floor(self.mark.width() / 2)
             self.mark_offset_y_min = math.floor(self.mark.height() / 2)
@@ -201,7 +246,12 @@ class WaterMarker():
             self.text_offset_x_max = self.text_width - self.text_offset_x_min
             self.text_offset_y_max = self.text_height - self.text_offset_y_min
         
-    def text_size_calculate(self):
+    def text_size_calculate(self) -> None:
+        """
+        calculate text size by create a temporary text on canvas
+        to get width, height, and calculate offset of the watermark,
+        delete temporary text on canvas afterwards.
+        """
         calibrate_text = self.canvas.create_text(canvas_width/2, canvas_height/2, text=self.entry_text.get(), font=default_font, anchor='nw') # TODO: get font from UI
         bbox = self.canvas.bbox(calibrate_text)
         
@@ -212,7 +262,12 @@ class WaterMarker():
         self.canvas.delete(calibrate_text)
         self.exist_mark = True
     
-    def save_image(self):
+    def save_image(self) -> None:
+        """
+        save image with watermark, where the location of watermark is set by user,
+        snap to border if watermark will be outside of image,
+        image will be saved at root folder in project.
+        """
         width_scale = self.source_image.width / self.image.width()
         height_scale = self.source_image.height / self.image.height()
         
@@ -224,12 +279,6 @@ class WaterMarker():
                 x -= self.mark.width()
             if self.snap[1] == self.image.height():
                 y -= self.mark.height()
-            print("snap")
-            print("source", self.source_image.width, self.source_image.height)
-            print("snap", self.snap[0], self.snap[1])
-            print("image", self.image.width(), self.image.height())
-            print("current", self.current_stats)
-            print("xy", x, y)
         else:
             self.canvas.create_oval(self.true_position[0], self.true_position[1], self.true_position[0], self.true_position[1], fill='red', width=5)
             self.canvas.create_oval(self.image_datum_x, self.image_datum_y, self.image_datum_x, self.image_datum_y, fill='blue', width=5)
@@ -239,14 +288,6 @@ class WaterMarker():
             x = np.round(true_x * width_scale)
             y = np.round(true_y * height_scale)
 
-            print("in img")
-            print("source", self.source_image.width, self.source_image.height)
-            print("snap", self.snap)
-            print("image", self.image.width(), self.image.height())
-            print("current", self.current_stats)
-            print("true", self.true_position)
-            print("xy", x, y)
-            
         mark_true_width = np.round(self.mark.width() * height_scale)
         mark_true_height = np.round(self.mark.height() * width_scale)
         
@@ -260,11 +301,15 @@ class WaterMarker():
         
         
         
-        # text part
+        # TODO: text part
         # self.source_mark = image_pil 
     
     # functions bind with command/action
-    def switch_button(self):
+    def switch_button(self) -> None:
+        """
+        switch watermark to image or text, not-the-current one,
+        remove previous created watermark and preview.
+        """
         if self.watermark_contain == 'image':
             self.btn_switch.config(image=self.switch_l) # type: ignore
             self.watermark_contain = 'text'
@@ -282,16 +327,38 @@ class WaterMarker():
             except AttributeError:
                 print("making sure to remove unwanted watermarks")
         
-    def remove_default_text(self, event):
+    def remove_default_text(self, event) -> None:
+        """
+        remove default text in tk.Entry, when user click in tk.Entry
+        and bind M1 to function:self.entry_action.
+
+        Args:
+            event (_type_): _description_ #TODO: [last] check if anything need to be here
+        """
         self.user_enter_text.set("")
         self.entry_text.bind("<Button-1>", self.entry_action)
         self.entry_action(event) # make sure first click also force calibrate
         
-    def entry_action(self, event):
+    def entry_action(self, event) -> None:
+        """
+        self self.text_calibrate and self.exist_mark to False,
+        this will mark watermark(text) to calibrate when user click on canvas.
+
+        Args:
+            event (_type_): _description_ #TODO: [last] check if anything need to be here
+        """
         self.text_calibrate = False
         self.exist_mark = False
     
-    def canvas_action(self, event, *, method:str):
+    def canvas_action(self, event, *, method:str) -> None:
+        """
+        main function in responce for user action in canvas,
+        manage everything after click and mouse movement.
+
+        Args:
+            event (_type_): _description_ #TODO: [last] check if anything need to be here
+            method (str): user action on canvas, 'clicked' or 'motion'.
+        """
         try:
             self.remove_exist_watermark(method=method)
         except AttributeError:
@@ -299,27 +366,44 @@ class WaterMarker():
             
         x0, y0 = event.x, event.y
         x, y, snap_position = self.mouse_loc_calibrate(x0, y0) 
-        # TODO: test if calibrate will cause slight movement of the center of the watermark between preview and image 
         
         if method == 'clicked':
             self.snap:tuple[int,int]|None = snap_position
             self.true_position:tuple[int, int] = x0, y0
-            
         self.draw_watermark(x, y, method=method)
         
     
     # support functions
-    def image_size_calculate(self, width:int, height:int, *, type:str):
+    def image_size_calculate(self, width:int, height:int, *, type:str) -> tuple[int, int]:
+        """
+        calculate size of image to have a set blank border in canvas, which will use later to resize image. 
+
+        Args:
+            width (int): original width of the image.
+            height (int): original height of the image.
+            type (str): type of the image, 'image' or 'mark'.
+
+        Returns:
+            tuple[int, int]: calculated width and height to meet one and/or both of the requirement of the canvas(to have a set blank border).
+        """
         if type == 'image':
             ratio:float =  min((canvas_width - canvas_padx * 2) / width, (canvas_height - canvas_pady * 2) / height) 
         elif type == 'mark':
             ratio:float =  min(mark_width/width, mark_height/height) 
-        else:
-            raise NameError(f"Argument type '{type}' isn't allowed.")
         size:tuple[int, int] = math.floor(width * ratio), math.floor(height * ratio)
         return size
     
-    def remove_exist_watermark(self, method:str):
+    def remove_exist_watermark(self, method:str) -> None:
+        """
+        remove watermark on canvas by following:
+        1. remove previous previews
+        2. remove previous watermark when user clicked on canvas
+        3. remove all not-the-current watermark and preview
+        
+
+        Args:
+            method (str): user action, 'clicked' or 'motion'.
+        """
         if method == 'clicked':
             if self.watermark_contain == 'image':
                 self.canvas.delete(self.watermark_image)
@@ -331,7 +415,15 @@ class WaterMarker():
             elif self.watermark_contain == 'text':
                 self.canvas.delete(self.watermark_text_preview)
     
-    def draw_watermark(self, x, y, method:str):
+    def draw_watermark(self, x:int, y:int, method:str) -> None:
+        """
+        draw watermark on (x, y) in canvas, watermark type is determined by args:method.
+
+        Args:
+            x (int): x location to draw on the canvas.
+            y (int): y location to draw on the canvas.
+            method (str): user action, 'clicked' or 'motion'.
+        """
         if self.watermark_contain == 'image':
             if method == 'clicked':
                 self.watermark_image = self.canvas.create_image(x, y, image=self.mark, anchor='nw')
@@ -346,7 +438,21 @@ class WaterMarker():
             elif method == 'motion':
                 self.watermark_text_preview = self.canvas.create_text(x, y, text=self.entry_text.get(), font=default_font, anchor='nw')
     
-    def mouse_loc_calibrate(self, x:int, y:int):
+    def mouse_loc_calibrate(self, x:int, y:int) -> tuple[int, int, tuple[int,int]|None]:
+        """
+        make sure wherever user's mouse is in canvas, 
+        watermark and preview will appear on image.
+        
+        Args:
+            x (int): x of mouse location
+            y (int): y of mouse location
+
+        Raises:
+            ValueError: user click on somewhere unexpected, can't imagine how, so print everything thought be helpful.
+
+        Returns:
+            tuple[int, int, tuple[int,int]|None]: (x_calibrated, y_calibrated, (x_snap_position, y_snap_position)|None), None if watermark isn't snapped to border of image.
+        """
         # TODO: add a self.current_minax: tuple[int, int, int, int] to store xyminmax to use later as snap_location ??
         if self.watermark_contain == 'image':
             x_min = self.image_datum_x + self.mark_offset_x_min
