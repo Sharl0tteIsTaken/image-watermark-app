@@ -2,12 +2,14 @@ import tkinter as tk
 import numpy as np
 import math
 
-from tkinter import filedialog
+import support_func
+
+from tkinter import filedialog, font, ttk, messagebox
 from PIL import ImageTk, Image, ImageDraw
 
 
 # default key dimensions
-window_width = 1200
+window_width = 1400
 window_height = 700
 canvas_width = 860
 canvas_height = 560
@@ -15,7 +17,15 @@ canvas_padx = 30
 canvas_pady = 30
 mark_width = 50
 mark_height = 50
-default_font = ("Ariel", 20, "normal") #
+default_font = ("Ariel", 16, "normal") #
+
+font_info = "\
+rule of font:                                    \n\
+1. will prioritise font selected than entered.   \n\
+2. entered font will be ignored if not found.    \n\
+3. if didn't select a font or not entered/found, \n\
+   default font is selected.                     "
+# FIXME:  typeset font_info.
 
 class WaterMarker():
     """
@@ -58,7 +68,7 @@ class WaterMarker():
         self.block_panel = tk.LabelFrame(self.window, bg="white", text="open file")
         self.block_panel.grid(column=0, row=0, columnspan=1)
         
-        self.block_edit = tk.LabelFrame(self.window, bg="white", text="change format and font of the text")
+        self.block_edit = tk.LabelFrame(self.window, bg="white", text="font of text", padx=10, pady=10)
         self.block_edit.grid(column=1, row=1)
     
     def setup_widget(self) -> None:
@@ -73,9 +83,11 @@ class WaterMarker():
         - btn_save
         - entry_text
         """
+        # block image
         self.canvas = tk.Canvas(self.block_image, bg='white', width=canvas_width, height=canvas_height)
         self.canvas.pack()
         
+        # block panel
         self.btn_open_image = tk.Button(self.block_panel, text="image", command=self.load_image)
         self.btn_open_image.grid(column=0, row=0)
         
@@ -96,14 +108,64 @@ class WaterMarker():
         self.btn_save = tk.Button(self.block_panel, text='Save', command=self.save_image)
         self.btn_save.grid(column=3, row=0)
         
-        self.entry_text = tk.Entry(self.block_edit, textvariable=self.user_enter_text)
-        self.entry_text.bind("<Button-1>", self.remove_default_text)
-        self.entry_text.grid(column=0, row=0)
+        # block edit
+        self.lbl_text = tk.Label(self.block_edit, text="text", bg='white')
+        self.lbl_text.grid(column=0, row=0)
         
-        self.btn_confirm = tk.Button(self.block_edit, text='Confirm Changes', command=self.text_size_calculate)
-        self.btn_confirm.grid(column=0, row=1)
+        self.entry_text = tk.Entry(self.block_edit, textvariable=self.user_enter_text, cursor='xterm', width=30)
+        self.entry_text.bind("<Button-1>", lambda event: self.clear_tkentry_text(event, tag='text'))
+        self.entry_text.grid(column=1, row=0)
+        
+        
+        self.lbl_font = tk.Label(self.block_edit, text="fontⓘ", bg='white')
+        support_func.add_tool_tip(self.lbl_font, font_info)
+        self.lbl_font.grid(column=0, row=1, rowspan=2)
+        
+        self.entry_font = tk.Entry(self.block_edit, textvariable=self.user_enter_font, width=30)
+        self.entry_font.bind("<Button-1>", lambda event: self.clear_tkentry_text(event, tag='font'))
+        self.entry_font.bind("<Return>", self.validate_font) # type: ignore
+        self.entry_font.grid(column=1, row=1)
+        
+        self.lbl_font = tk.Label(self.block_edit, text="or", width=3, bg='white')
+        self.lbl_font.grid(column=2, row=1)
+        
+        self.selector_font = ttk.Combobox(self.block_edit, values=('select a font',), width=32)
+        self.selector_font.current(0)
+        self.selector_font['values'] = font.families()
+        self.selector_font.bind(
+            "<<ComboboxSelected>>", 
+            lambda event: 
+                self.user_enter_font.set(self.selector_font.get()), 
+                self.text_size_calculate) # type: ignore
+        self.selector_font.grid(column=1, row=2, columnspan=2)
+        
+        
+        self.lbl_fontsize = tk.Label(self.block_edit, text="size", bg='white')
+        self.lbl_fontsize.grid(column=0, row=3)
+        
+        self.entry_fontsize = tk.Spinbox(
+            self.block_edit, 
+            from_=8, to=108, 
+            command=self.text_size_calculate, 
+            textvariable=self.user_enter_fontsize, 
+            width=4)
+        self.entry_fontsize.grid(column=1, row=3, sticky='w')
+        
+        
+        self.lbl_fontstyle = tk.Label(self.block_edit, text="style", bg='white')
+        self.lbl_fontstyle.grid(column=0, row=4)
+        
+        self.selector_fontstyle = ttk.Combobox(self.block_edit, width=8)
+        self.selector_fontstyle['values'] = ('normal', 'italic', 'bold')
+        self.selector_fontstyle.current(0)
+        self.selector_fontstyle.bind("<<ComboboxSelected>>", self.text_size_calculate) # type: ignore
+        self.selector_fontstyle.grid(column=1, row=4, sticky='w')
+
+        
+        self.btn_confirm = tk.Button(self.block_edit, text='update', command=self.text_size_calculate)
+        self.btn_confirm.grid(column=1, row=5, sticky='w')
         # TODO: [later] add QOL update so that if user forgot to confirm change it'll still update, make it a force update
-        
+        # set canvas and block edit alternating bind with function that calls text calibrate.
         
     def setup_variable(self) -> None:
         """
@@ -115,6 +177,12 @@ class WaterMarker():
         self.user_enter_text = tk.StringVar()
         self.user_enter_text.set("enter text as watermark")
         
+        self.user_enter_font = tk.StringVar()
+        self.user_enter_font.set("enter font")
+        
+        self.user_enter_fontsize = tk.IntVar()
+        self.user_enter_fontsize.set(default_font[1])
+        
     def setup_attribute(self) -> None:
         """
         create every attribute for other functions.
@@ -125,10 +193,12 @@ class WaterMarker():
         - exist_mark
         - text_calibrate
         """
-        self.watermark_contain:str = "image"
         self.exist_image = False
         self.exist_mark = False
         self.text_calibrate = True
+        self.watermark_contain:str = "image"
+        self.user_enter_font_store = "enter font"
+        self.user_select_font_store = "select a font"
     
     # key functions
     def operate(self) -> None:
@@ -246,13 +316,34 @@ class WaterMarker():
             self.text_offset_x_max = self.text_width - self.text_offset_x_min
             self.text_offset_y_max = self.text_height - self.text_offset_y_min
         
-    def text_size_calculate(self) -> None:
+    def text_size_calculate(self, event=None) -> None:
         """
         calculate text size by create a temporary text on canvas
         to get width, height, and calculate offset of the watermark,
         delete temporary text on canvas afterwards.
+        
+        bind('<ComboboxSelected>') somehow cause TypeError: 
+        1. missing 1 required positional argument: 'event'
+        2. takes 1 positional argument but 2 were given
+        either 1. or 2. will be raised, so added event=None in args, but that has no effect(fingers crossed).
         """
-        calibrate_text = self.canvas.create_text(canvas_width/2, canvas_height/2, text=self.entry_text.get(), font=default_font, anchor='nw') # TODO: get font from UI
+        self.validate_font()
+        if self.selector_font.get() == 'select a font' and self.entry_font.get() == 'enter font':
+            request_font = default_font[0]
+        elif self.selector_font.get() != 'select a font':
+            request_font = self.selector_font.get()
+        elif self.entry_font.get() != 'enter font':
+            if self.entry_font.get() in font.families():
+                request_font = self.entry_font.get()
+            else:
+                request_font = default_font[0]
+            
+        format_ = (request_font, self.user_enter_fontsize.get(), self.selector_fontstyle.get())
+        
+        
+        
+        
+        calibrate_text = self.canvas.create_text(canvas_width/2, canvas_height/2, text=self.entry_text.get(), font=format_, anchor='nw') # TODO: get font from UI
         bbox = self.canvas.bbox(calibrate_text)
         
         self.text_width = bbox[2] - bbox[0] # type: ignore
@@ -327,7 +418,7 @@ class WaterMarker():
             except AttributeError:
                 print("making sure to remove unwanted watermarks")
         
-    def remove_default_text(self, event) -> None:
+    def clear_tkentry_text(self, event, tag:str) -> None:
         """
         remove default text in tk.Entry, when user click in tk.Entry
         and bind M1 to function:self.entry_action.
@@ -335,7 +426,10 @@ class WaterMarker():
         Args:
             event (_type_): _description_ #TODO: [last] check if anything need to be here
         """
-        self.user_enter_text.set("")
+        if tag == 'text':
+            self.user_enter_text.set("")
+        elif tag == 'font':
+            self.user_enter_font.set("")
         self.entry_text.bind("<Button-1>", self.entry_action)
         self.entry_action(event) # make sure first click also force calibrate
         
@@ -393,6 +487,27 @@ class WaterMarker():
         size:tuple[int, int] = math.floor(width * ratio), math.floor(height * ratio)
         return size
     
+    def validate_font(self, event=None) -> None:
+        """
+        validate font from user, show messagebox when font not exist.
+        
+        Args:
+            event (_type_): see text_size_calculate()
+        """
+        user_enter = self.entry_font.get()
+        if self.font_changed():
+            if user_enter not in font.families():
+                messagebox.showerror(
+                    title="font not found.", 
+                    message=f"font entered: '{user_enter}',\nmake sure everything was correct, or select one instead.")
+            
+    def font_changed(self) -> bool:
+        if self.entry_font.get() == self.user_enter_font_store and self.selector_font.get() == self.user_select_font_store:
+            return False
+        self.user_enter_font_store = self.entry_font.get()
+        self.user_select_font_store = self.selector_font.get()
+        return True
+            
     def remove_exist_watermark(self, method:str) -> None:
         """
         remove watermark on canvas by following:
