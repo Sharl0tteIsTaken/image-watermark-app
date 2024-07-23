@@ -4,9 +4,9 @@ import math
 
 import support_func
 
-from tkinter import filedialog, font, ttk, messagebox
-from PIL import ImageTk, Image, ImageDraw
-
+from PIL import Image, ImageDraw, ImageTk
+from string import ascii_letters
+from tkinter import colorchooser, filedialog, font, messagebox, ttk
 
 # default key dimensions
 window_width = 1400
@@ -62,14 +62,17 @@ class WaterMarker():
         - block_image
         - block_panel
         """
+        self.block_panel = tk.LabelFrame(self.window, text="open file", bg="white")
+        self.block_panel.grid(column=0, row=0, columnspan=1) # TODO: why colspan 1?
+        
         self.block_image = tk.LabelFrame(self.window, bg="white", border=0)
         self.block_image.grid(column=0, row=1, ipadx=10, ipady=10)
         
-        self.block_panel = tk.LabelFrame(self.window, bg="white", text="open file")
-        self.block_panel.grid(column=0, row=0, columnspan=1)
+        self.block_edit = tk.LabelFrame(self.window, text="font of text", bg="white", padx=10, pady=10)
+        self.block_edit.grid(column=1, row=1, sticky='nw')
         
-        self.block_edit = tk.LabelFrame(self.window, bg="white", text="font of text", padx=10, pady=10)
-        self.block_edit.grid(column=1, row=1)
+        self.block_text_preview = tk.LabelFrame(self.window, text="text watermark preview", bg="white", padx=10, pady=10)
+        self.block_text_preview.grid(column=1, row=1, sticky='s')
     
     def setup_widget(self) -> None:
         """
@@ -131,7 +134,7 @@ class WaterMarker():
         
         self.selector_font = ttk.Combobox(self.block_edit, values=('select a font',), width=32)
         self.selector_font.current(0)
-        self.selector_font['values'] = font.families()
+        self.selector_font['values'] = self.include_fonts
         self.selector_font.bind(
             "<<ComboboxSelected>>", 
             lambda event: 
@@ -162,10 +165,28 @@ class WaterMarker():
         self.selector_fontstyle.grid(column=1, row=4, sticky='w')
 
         
+        self.lbl_color = tk.Label(self.block_edit, text="color", bg='white')
+        self.lbl_color.grid(column=0, row=5)
+        
+        self.btn_color_chooser = tk.Button(self.block_edit, text="select color", command=self.choose_color)
+        self.btn_color_chooser.grid(column=1, row=5, sticky='w')
+        
+        
         self.btn_confirm = tk.Button(self.block_edit, text='update', command=self.text_size_calculate)
-        self.btn_confirm.grid(column=1, row=5, sticky='w')
-        # TODO: [later] add QOL update so that if user forgot to confirm change it'll still update, make it a force update
-        # set canvas and block edit alternating bind with function that calls text calibrate.
+        self.btn_confirm.grid(column=1, row=6, sticky='w')
+        
+        # TODO: add transparency % bar to self.block_edit
+        # TODO: add checkbox of preview watermark
+        
+        self.lbl_watermark_text_preview = tk.Label(
+            self.block_text_preview, 
+            text="text watermark preview", 
+            bg='white', fg=self.current_font_color)
+        self.lbl_watermark_text_preview.grid(column=1, row=5, sticky='w')
+        
+        # TODO: add QOL update so that if user forgot to confirm change it'll still update, make it a force update
+        # set canvas and block edit alternating bind with motion to function that calls text calibrate.
+        
         
     def setup_variable(self) -> None:
         """
@@ -199,6 +220,12 @@ class WaterMarker():
         self.watermark_contain:str = "image"
         self.user_enter_font_store = "enter font"
         self.user_select_font_store = "select a font"
+        self.current_font_color = "black"
+        
+        fonts:list[str] = list(font.families())
+        mixed:list[str] = [font for font in fonts[:] if font[0] != "@"]
+        chinese:list[str] = [font for font in mixed[:] if font[0] not in ascii_letters]
+        self.include_fonts:list[str] = sorted(mixed) + sorted(chinese)
     
     # key functions
     def operate(self) -> None:
@@ -223,8 +250,10 @@ class WaterMarker():
         Args:
             filepath (str): file path of the loading image.
             type (str): type of loading image, 'image' or 'mark'.
-            alpha (int | None, optional): add translucent to the image, range 0 ~ 255, translucent % = (alpha/255). Defaults to None.
-            max_size (tuple[int,int] | None, optional): set max size of the image, image will be scale up to width and/or height specified. Defaults to None.
+            alpha (int | None, optional): add translucent to the image, 
+                range 0 ~ 255, translucent % = (alpha/255). Defaults to None.
+            max_size (tuple[int,int] | None, optional): set max size of the image, 
+                image will be scale up to width and/or height specified. Defaults to None.
 
         Returns:
             ImageTk.PhotoImage: the image specified.
@@ -333,17 +362,18 @@ class WaterMarker():
         elif self.selector_font.get() != 'select a font':
             request_font = self.selector_font.get()
         elif self.entry_font.get() != 'enter font':
-            if self.entry_font.get() in font.families():
+            if self.entry_font.get() in self.include_fonts:
                 request_font = self.entry_font.get()
             else:
                 request_font = default_font[0]
             
-        format_ = (request_font, self.user_enter_fontsize.get(), self.selector_fontstyle.get())
+        self.current_font = (request_font, self.user_enter_fontsize.get(), self.selector_fontstyle.get())
         
-        
-        
-        
-        calibrate_text = self.canvas.create_text(canvas_width/2, canvas_height/2, text=self.entry_text.get(), font=format_, anchor='nw') # TODO: get font from UI
+        calibrate_text = self.canvas.create_text(
+            canvas_width/2, canvas_height/2, 
+            text=self.entry_text.get(), 
+            font=self.current_font, 
+            anchor='center')
         bbox = self.canvas.bbox(calibrate_text)
         
         self.text_width = bbox[2] - bbox[0] # type: ignore
@@ -352,6 +382,8 @@ class WaterMarker():
         self.update_mark_offset(type='text', bbox=bbox)
         self.canvas.delete(calibrate_text)
         self.exist_mark = True
+        
+        self.lbl_watermark_text_preview.config(font=self.current_font, text=self.user_enter_text.get())
     
     def save_image(self) -> None:
         """
@@ -496,7 +528,7 @@ class WaterMarker():
         """
         user_enter = self.entry_font.get()
         if self.font_changed():
-            if user_enter not in font.families():
+            if user_enter not in self.include_fonts:
                 messagebox.showerror(
                     title="font not found.", 
                     message=f"font entered: '{user_enter}',\nmake sure everything was correct, or select one instead.")
@@ -507,6 +539,14 @@ class WaterMarker():
         self.user_enter_font_store = self.entry_font.get()
         self.user_select_font_store = self.selector_font.get()
         return True
+    
+    def choose_color(self) -> None:
+        color_code = colorchooser.askcolor(title ="Choose color") 
+        if not color_code[1]:
+            self.current_font_color = 'black'
+        else:
+            self.current_font_color = color_code[1]
+            self.lbl_watermark_text_preview.config(fg=self.current_font_color)
             
     def remove_exist_watermark(self, method:str) -> None:
         """
@@ -549,9 +589,19 @@ class WaterMarker():
                 # TODO: make sure to clibrate here?
                 self.text_size_calculate()
             if method == 'clicked':
-                self.watermark_text = self.canvas.create_text(x, y, text=self.entry_text.get(), font=default_font, anchor='nw')
+                self.watermark_text = self.canvas.create_text(
+                    x, y, 
+                    text=self.entry_text.get(), 
+                    font=self.current_font, 
+                    fill=self.current_font_color,
+                    anchor='nw')
             elif method == 'motion':
-                self.watermark_text_preview = self.canvas.create_text(x, y, text=self.entry_text.get(), font=default_font, anchor='nw')
+                self.watermark_text_preview = self.canvas.create_text(
+                    x, y, 
+                    text=self.entry_text.get(), 
+                    font=self.current_font, 
+                    fill=self.current_font_color,
+                    anchor='nw')
     
     def mouse_loc_calibrate(self, x:int, y:int) -> tuple[int, int, tuple[int,int]|None]:
         """

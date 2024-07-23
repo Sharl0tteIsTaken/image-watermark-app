@@ -1,4 +1,6 @@
 import tkinter as tk
+from tkinter import font
+from string import ascii_letters
 
 class ToolTip(object):
     """
