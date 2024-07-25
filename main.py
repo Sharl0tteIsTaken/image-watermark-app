@@ -394,9 +394,8 @@ class WaterMarker():
             font=self.current_font, 
             anchor='center')
         bbox = self.canvas.bbox(calibrate_text)
-        
-        self.text_width = bbox[2] - bbox[0] # type: ignore
-        self.text_height = bbox[3] - bbox[1] # type: ignore
+        print("bbox",bbox)
+        # self.canvas.create_rectangle(bbox, outline='red')
 
         self.update_mark_offset(type='text', bbox=bbox)
         self.canvas.delete(calibrate_text)
@@ -443,15 +442,20 @@ class WaterMarker():
                 y = np.round(self.snap[1] * self.image_height_scale)
                 
                 if self.snap[0] == self.image.width():
-                    x -= self.text_width
+                    x -= self.text_width / 0.75
                 if self.snap[1] == self.image.height():
-                    y -= self.text_height
+                    y -= self.text_height / 0.75
+                print("save, position", (x, y))
+                print(F"fomula = ({x} + {self.text_width}) / {self.image_width_scale}, ({y} + {self.text_height}) / {self.image_height_scale}")
+                print(f"{(x + self.text_width) / self.image_width_scale, (y + self.text_height)/self.image_height_scale}")
+
             else:
                 true_x = self.true_position[0] - self.text_offset_x_min - self.image_datum_x
                 true_y = self.true_position[1] - self.text_offset_y_min - self.image_datum_y
                 
                 x = np.round(true_x * self.image_width_scale)
                 y = np.round(true_y * self.image_height_scale)
+                
             offset = (round(x), round(y))
             
             scale = (self.image_width_scale + self.image_height_scale) / 2
@@ -462,7 +466,7 @@ class WaterMarker():
             
             rq_font, rq_fontsize, request_style = self.current_font # rq: requested
             
-            fontsize = round(np.round(rq_fontsize * scale * scale)) # FIXME: why????????? how does this works?
+            size = (rq_fontsize * scale) / 0.75 # font size * 0.75 = pixel, ImageFont.truetype uses pixel
             
             # cite: https://stackoverflow.com/questions/1815165/draw-bold-italic-text-with-pil#comment136704224_1815170
             if request_style == "bold":
@@ -473,7 +477,7 @@ class WaterMarker():
                 rq_font += 'bi'
             rq_font += '.ttf'
             # print(rq_font.lower(), fontsize, alpha, self.scale_opaque.get())
-            fnt = ImageFont.truetype(rq_font.lower(), fontsize)
+            fnt = ImageFont.truetype(rq_font.lower(), size) 
             
             # cite: https://pillow.readthedocs.io/en/stable/reference/ImageDraw.html#example-draw-partial-opacity-text
             with Image.open(self.filepath_image).convert("RGBA") as image:
@@ -481,7 +485,7 @@ class WaterMarker():
 
                 d = ImageDraw.Draw(watermark)
                 d.text(offset, text, font=fnt, fill=(r, g, b, alpha))
-                # d.circle(offset, radius=5, fill='red')
+                d.circle(offset, radius=1, fill='red')
                 
                 result = Image.alpha_composite(image, watermark)
                 result.save("result.png")
@@ -555,6 +559,7 @@ class WaterMarker():
         if method == 'clicked':
             self.snap:tuple[int,int]|None = snap_position
             self.true_position:tuple[int, int] = x0, y0
+            print("true position", self.true_position)
         self.draw_watermark(x, y, method=method)
         
     
@@ -644,9 +649,6 @@ class WaterMarker():
             elif method == 'motion':
                 self.watermark_image_preview = self.canvas.create_image(x, y, image=self.ghost, anchor='nw')
         elif self.watermark_contain == 'text':
-            if not self.text_calibrate:
-                # TODO: make sure to clibrate here?
-                self.text_size_calculate()
             if method == 'clicked':
                 # print(self.current_font)
                 self.watermark_text = self.canvas.create_text(
@@ -655,8 +657,8 @@ class WaterMarker():
                     font=self.current_font, 
                     fill=self.current_font_hexcolor,
                     anchor='nw')
-                
-                # self.canvas.create_oval(x, y, x, y, width=5, fill='blue')
+                print("canvas anchor", x, y)
+                self.canvas.create_oval(x,y,x,y, outline='red', width=1)
             elif method == 'motion':
                 self.watermark_text_preview = self.canvas.create_text(
                     x, y, 
@@ -688,6 +690,9 @@ class WaterMarker():
             y_max = self.image_datum_y + self.image.height() - self.mark_offset_y_max
             self.current_stats:tuple[str,int,int,int,int] = 'image', x_min, y_min, x_max, y_max # TODO: del this if not used
         elif self.watermark_contain == 'text':
+            if not self.text_calibrate:
+                # TODO: make sure to clibrate here?
+                self.text_size_calculate()
             x_min = self.image_datum_x + self.text_offset_x_min
             y_min = self.image_datum_y + self.text_offset_y_min
             x_max = self.image_datum_x + self.image.width() - self.text_offset_x_max
