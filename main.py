@@ -4,7 +4,7 @@ import math
 
 import support_func
 
-from PIL import Image, ImageDraw, ImageFont, ImageTk
+from PIL import Image, ImageDraw, ImageFont, ImageTk, ImageFilter
 from string import ascii_letters
 from tkinter import colorchooser, filedialog, font, messagebox, ttk
 
@@ -55,7 +55,12 @@ class WaterMarker():
         self.setup_attribute()
         self.setup_variable()
         self.setup_labelframe()
+        self.load_setup_default_()
         self.setup_widget()
+        
+        self.text_mark_maker()
+        
+        
         
     def setup_attribute(self) -> None:
         """
@@ -69,10 +74,10 @@ class WaterMarker():
         """
         self.exist_image = False
         self.exist_mark = False
-        self.text_calibrate = True
-        self.user_enter_font_store = "enter font"
-        self.user_select_font_store = "select a font"
+        self.mark_pending = False
+        self.text_calibrate = False
         self.current_font_hexcolor = "black"
+        self.user_select_font_store = 'select a font'
         self.current_font_rgb:tuple[int,int,int] = (0, 0, 0)
         
         fonts:list[str] = list(font.families())
@@ -92,6 +97,7 @@ class WaterMarker():
         
         self.user_enter_font = tk.StringVar()
         self.user_enter_font.set("enter font")
+        self.user_enter_font_store = self.user_enter_font.get()
         
         self.user_enter_fontsize = tk.IntVar()
         self.user_enter_fontsize.set(default_font[1])
@@ -116,6 +122,15 @@ class WaterMarker():
         self.block_text_preview = tk.LabelFrame(self.window, text="text watermark preview", bg="white", padx=10, pady=10)
         self.block_text_preview.grid(column=1, row=1, sticky='s')
     
+    def load_setup_default_(self):
+        # TODO: [later] move to load_asset() load asset for UI
+        self.default_image = self.proper_load(filepath='assets/img/default_image.png', type='image')
+        self.image_width_scale = self.image_pil.width / self.default_image.width()
+        self.image_height_scale = self.image_pil.height / self.default_image.height()
+        
+        self.switch_r = self.proper_load(filepath="assets/img/switch-right.png", type='image', max_size=(100,50))
+        self.switch_l = self.proper_load(filepath="assets/img/switch-left.png", type='image', max_size=(100,50))
+    
     def setup_widget(self) -> None:
         """
         create and place every widget.
@@ -132,20 +147,14 @@ class WaterMarker():
         self.canvas = tk.Canvas(self.block_image, bg='white', width=canvas_width, height=canvas_height)
         self.canvas.pack()
         
+        self.canvas_image_default = self.canvas.create_image(canvas_width/2, canvas_height/2, image=self.default_image, anchor='center')
+        
         # block panel
         self.btn_open_image = tk.Button(self.block_panel, text="image", command=self.load_image)
         self.btn_open_image.grid(column=0, row=0)
         
         self.btn_open_mark = tk.Button(self.block_panel, text="watermark", command=self.load_mark)
         self.btn_open_mark.grid(column=1, row=0)
-        
-        # TODO: [later] move to load_asset() load asset for UI
-        self.default_image = self.proper_load(filepath='assets/img/default_image.png', type='image')
-        self.canvas_image_default = self.canvas.create_image(canvas_width/2, canvas_height/2, image=self.default_image, anchor='center')
-        
-        self.switch_r = self.proper_load(filepath="assets/img/switch-right.png", type='image', max_size=(100,50))
-        self.switch_l = self.proper_load(filepath="assets/img/switch-left.png", type='image', max_size=(100,50))
-        
         
         self.btn_switch = tk.Button(self.block_panel, image=self.switch_r, command=self.switch_button) # type: ignore
         self.btn_switch.grid(column=2, row=0)
@@ -181,7 +190,7 @@ class WaterMarker():
             "<<ComboboxSelected>>", 
             lambda event: 
                 self.user_enter_font.set(self.selector_font.get()), 
-                self.text_size_calculate) # type: ignore
+                self.text_mark_maker) # type: ignore
         self.selector_font.grid(column=1, row=2, columnspan=2)
         
         
@@ -191,7 +200,7 @@ class WaterMarker():
         self.spnbx_fontsize = tk.Spinbox(
             self.block_edit, 
             from_=8, to=108, 
-            command=self.text_size_calculate, 
+            command=self.text_mark_maker, 
             textvariable=self.user_enter_fontsize, 
             width=4)
         self.spnbx_fontsize.grid(column=1, row=3, sticky='w')
@@ -203,7 +212,7 @@ class WaterMarker():
         self.selector_fontstyle = ttk.Combobox(self.block_edit, width=8)
         self.selector_fontstyle['values'] = ('normal', 'bold', 'italic', 'bold and italic')
         self.selector_fontstyle.current(0)
-        self.selector_fontstyle.bind("<<ComboboxSelected>>", self.text_size_calculate) # type: ignore
+        self.selector_fontstyle.bind("<<ComboboxSelected>>", self.text_mark_maker) # type: ignore
         self.selector_fontstyle.grid(column=1, row=4, sticky='w')
 
         
@@ -221,7 +230,7 @@ class WaterMarker():
         self.scale_opaque = tk.Scale(
             self.block_edit, 
             from_=0, to=100, 
-            command=self.text_size_calculate, 
+            command=self.text_mark_maker, 
             orient='horizontal', 
             bg='white', 
             width=10)
@@ -229,15 +238,11 @@ class WaterMarker():
         self.scale_opaque.grid(column=1, row=6, sticky='w')
         
         
-        self.btn_confirm = tk.Button(self.block_edit, text='update', command=self.text_size_calculate)
+        self.btn_confirm = tk.Button(self.block_edit, text='update', command=self.text_mark_maker)
         self.btn_confirm.grid(column=1, row=7, sticky='w')
         
         
-        self.lbl_watermark_text_preview = tk.Label(
-            self.block_text_preview, 
-            text="text watermark preview", 
-            bg='white', fg=self.current_font_hexcolor)
-        self.lbl_watermark_text_preview.grid(column=1, row=5, sticky='w')
+        
         
         # TODO: add QOL update so that if user forgot to confirm change it'll still update, make it a force update
         # set canvas and block edit alternating bind with motion to function that calls text calibrate.
@@ -254,7 +259,6 @@ class WaterMarker():
         *, 
         filepath:str, 
         type:str, 
-        alpha:int|None=None, 
         max_size:tuple[int,int]|None=None
         ) -> ImageTk.PhotoImage:
         """
@@ -274,19 +278,26 @@ class WaterMarker():
             ImageTk.PhotoImage: the image specified.
         """
         image_pil = Image.open(filepath)
+        
+        self.watermark_type = type
         if type == 'image':
-            self.source_image = image_pil
+            self.image_pil = image_pil
         elif type == 'mark':
-            self.source_mark = image_pil
+            self.mark_pil = image_pil
         elif type == "text":
-            self.source_mark = image_pil
-            return ImageTk.PhotoImage(image_pil)
+            self.mark_pil = image_pil
+            width = np.round(image_pil.width / self.image_width_scale)
+            height = np.round(image_pil.height / self.image_height_scale)
+            size = (round(width), round(height))
         if max_size:
             image_resize = image_pil.resize((max_size[0], max_size[1]))
+        elif type == "text":
+            image_resize = image_pil.resize(size)
         else:
-            image_resize = image_pil.resize(self.image_size_calculate(image_pil.width, image_pil.height, type=type))
-        if alpha:
-            image_resize.putalpha(alpha)
+            image_resize = image_pil.resize(
+                self.image_size_calculate(image_pil.width, image_pil.height, type=type)
+                )
+        self.exist_mark = True
         return ImageTk.PhotoImage(image_resize)
     
     def load_image(self) -> None:
@@ -294,11 +305,11 @@ class WaterMarker():
         ask user filepath to load image,
         create the image on canvas and remove default(place holder) image.
         """
-        self.filepath_image = 'assets/img/checkboard_color.png'
+        self.filepath_image = 'assets/img/200x200.png'
         self.image = self.proper_load(filepath=self.filepath_image, type='image')
         # self.image = self.proper_load(filepath=filedialog.askopenfilename(), type='image')
-        self.image_width_scale = self.source_image.width / self.image.width()
-        self.image_height_scale = self.source_image.height / self.image.height()
+        self.image_width_scale = self.image_pil.width / self.image.width()
+        self.image_height_scale = self.image_pil.height / self.image.height()
         
         # calculate where datum's(top left corner of image) position will be in the canvas.
         self.image_datum_x = math.floor((canvas_width - self.image.width()) / 2)
@@ -311,6 +322,7 @@ class WaterMarker():
         # remove default image
         self.canvas.delete(self.canvas_image_default)
         
+        self.update_mark_size()
         self.update_canvas_bind()
         
     def load_mark(self) -> None:
@@ -319,13 +331,8 @@ class WaterMarker():
         bind canvas with user action,
         calls to update watermark offset.
         """
-        # load watermark
-        self.mark = self.proper_load(filepath='assets/img/watermark.png', type='mark')
-        # self.mark = self.proper_load(filepath=filedialog.askopenfilename(), type='mark')
-
-        # set preview of watermark
-        self.ghost = self.proper_load(filepath='assets/img/watermark.png', type='mark', alpha=128)
-        # self.mark = self.proper_load(filepath=filedialog.askopenfilename(), type='mark')
+        self.ghost = self.mark = self.proper_load(filepath='assets/img/watermark.png', type='mark')
+        #self.ghost = self.mark = self.proper_load(filepath=filedialog.askopenfilename(), type='mark')
         
         self.exist_mark = True
         self.update_mark_offset(type='image')
@@ -342,6 +349,15 @@ class WaterMarker():
             self.canvas.bind("<Motion>", lambda event: self.canvas_action(event, method='motion'))
             self.canvas.focus_set()
         
+    def update_mark_size(self):
+        width = np.round(self.mark_pil.width / self.image_width_scale)
+        height = np.round(self.mark_pil.height / self.image_height_scale)
+        size = (round(width), round(height))
+        
+        image_resize = self.mark_pil.resize(size)
+        
+        self.mark = ImageTk.PhotoImage(image_resize)
+        
     def update_mark_offset(self, type:str, bbox:tuple[int,int,int,int]|None=None) -> None:
         """
         update watermark offset from user click position to top left corner of the watermark.
@@ -354,9 +370,8 @@ class WaterMarker():
         self.mark_offset_y_min = math.floor(self.mark.height() / 2)
         self.mark_offset_x_max = self.mark.width() - self.mark_offset_x_min
         self.mark_offset_y_max = self.mark.height() - self.mark_offset_y_min
-
         
-    def text_size_calculate(self, event=None) -> None:
+    def text_mark_maker(self, event=None) -> None:
         """
         calculate text size by create a temporary text on canvas
         to get width, height, and calculate offset of the watermark,
@@ -377,69 +392,47 @@ class WaterMarker():
                 request_font = self.entry_font.get()
             else:
                 request_font = default_font[0]
-        
-        # scale = (self.image_width_scale + self.image_height_scale) / 2
-        # fontsize:int = round(np.round(self.user_enter_fontsize.get() / scale))
-        
+
         self.current_font = (
             request_font, 
             self.user_enter_fontsize.get(), 
             self.selector_fontstyle.get())
-        
-        # calibrate_text = self.canvas.create_text(
-        #     canvas_width/2, canvas_height/2, 
-        #     text=self.entry_text.get(), 
-        #     font=self.current_font, 
-        #     anchor='center')
-        
-        # bbox = self.canvas.bbox(calibrate_text)
-        # text_width = bbox[2] - bbox[0]
-        # text_height = bbox[3] - bbox[1]
-        
-        pixel_size = self.current_font[1] / 0.75
+
+        pixel_size = (self.current_font[1] / 0.75)
         fnt = ImageFont.truetype("arial.ttf", size=pixel_size) # TODO: get foo += ".ttf" & foo += "bi" / "bl" / "i" before this line
         
         # to get border of the text from PIL
         _ = Image.new("RGBA", text_watermark_max_size, (255, 255, 255, 0))
         f = ImageDraw.Draw(_)
-        bbox = f.textbbox((0, 0), self.entry_text.get(), font=fnt)
+        f_bbox = f.textbbox((0, 0), self.user_enter_text.get(), font=fnt)
         
-        width = bbox[2] - bbox[0] + 2 + 5 # // offsets by eyeballing it. see source in root/test.py
-        height = bbox[3] - bbox[1] + 5 # // offsets by eyeballing it
+        width = f_bbox[2] - f_bbox[0] + 2 + 5 # // offsets by eyeballing it. see source in root/test.py
+        height = f_bbox[3] - f_bbox[1] + 5 # // offsets by eyeballing it
         
         # create the watermark from text
         with Image.new("RGBA", (width, height)).convert("RGBA") as base:
-            txt = Image.new("RGBA", base.size, (0, 0, 0, 0))
+            txt = Image.new("RGBA", base.size, (255, 255, 255, 0))
             d = ImageDraw.Draw(txt)
             
             offset = (3, -3) # // offsets by eyeballing it. see source in root/test.py
             alpha:int = round(np.round(255 * (self.scale_opaque.get() / 100)))
-            text_color = *self.current_font_rgb, alpha
+            text_color = 255, 0, 0, alpha # *self.current_font_rgb
             
             d.text(offset, self.user_enter_text.get(), font=fnt, fill=text_color)
             out = Image.alpha_composite(base, txt)
             out.save(watermark_fp)
-
-        self.mark = self.proper_load(filepath=watermark_fp, type="text")
-        self.ghost = self.proper_load(filepath=watermark_fp, type="text", alpha=128)
         
-        # x_scale = self.source_image.width / self.image.width()
-        # y_scale = self.source_image.height / self.image.height()
-
-        # width = self.source_mark.width * x_scale
-        # mark_height = self.source_mark.height * y_scale
+        self.ghost = self.mark = self.proper_load(filepath=watermark_fp, type="text")
         
-        # paste = canvas.create_image(100, 100, image=self.mark, anchor='center')
-
-        
-        
-        
+        x, y = round(self.canvas.winfo_width() / 2), round(self.canvas.winfo_height() / 2)
+        temp = self.canvas.create_image(x, y, image=self.mark, anchor='center')
+        bbox = self.canvas.bbox(temp)
         self.update_mark_offset(type='text', bbox=bbox)
-        # self.canvas.delete(calibrate_text)
-        self.exist_mark = True
+        self.canvas.delete(temp)
         
         # TODO: change this to image
-        self.lbl_watermark_text_preview.config(font=self.current_font, text=self.user_enter_text.get())
+        self.lbl_watermark_text_preview = tk.Label(self.block_text_preview, image=self.mark, bg='white') # type: ignore
+        self.lbl_watermark_text_preview.grid(column=1, row=5, sticky='w')
     
     def save_image(self) -> None:
         """
@@ -447,14 +440,17 @@ class WaterMarker():
         snap to border if watermark will be outside of image,
         image will be saved at root folder in project.
         """
+        x_offset = self.mark_pil.width
+        y_offset = self.mark_pil.height
+        
         if self.snap:
             x = np.round(self.snap[0] * self.image_width_scale)
             y = np.round(self.snap[1] * self.image_height_scale)
 
             if self.snap[0] == self.image.width():
-                x -= self.mark.width()
+                x -= x_offset
             if self.snap[1] == self.image.height():
-                y -= self.mark.height()
+                y -= y_offset
         else:
             true_x = self.true_position[0] - self.mark_offset_x_min - self.image_datum_x
             true_y = self.true_position[1] - self.mark_offset_y_min - self.image_datum_y
@@ -463,15 +459,17 @@ class WaterMarker():
             y = np.round(true_y * self.image_height_scale)
         offset = (round(x), round(y))
 
-        width = np.round(self.mark.width() * self.image_height_scale)
-        height = np.round(self.mark.height() * self.image_width_scale)
-        size = (round(width), round(height))
+        # width = np.round(self.mark.width() * self.image_height_scale)
+        # height = np.round(self.mark.height() * self.image_width_scale)
+        # size = (round(width), round(height))
 
-        resized_mark = self.source_mark.resize(size)
-        result_image = self.source_image.copy()
+        # resized_mark = self.mark_pil.resize(size)
+        mark = self.mark_pil.copy()
+        
+        result_image = self.image_pil.copy()
         # result_image.paste(resized_mark, offset)
-        result_image.alpha_composite(resized_mark, offset)
-        result_image.save("result.png")
+        result_image.alpha_composite(mark, offset)
+        result_image.save("result.png", quality=100)
         
         # elif self.watermark_contain == 'text':
         #     if self.snap:
@@ -535,8 +533,8 @@ class WaterMarker():
         """
         self.btn_switch.config(image=self.switch_l) # type: ignore
         try:
-            self.canvas.delete(self.watermark_preview)
-            self.canvas.delete(self.watermark)
+            self.canvas.delete(self.canvas_mark_preview)
+            self.canvas.delete(self.canvas_mark)
         except AttributeError:
             print("making sure to remove unwanted watermarks")
         
@@ -586,7 +584,6 @@ class WaterMarker():
         if method == 'clicked':
             self.snap:tuple[int,int]|None = snap_position
             self.true_position:tuple[int, int] = x0, y0
-            print("true position", self.true_position)
         self.draw_watermark(x, y, method=method)
         
     
@@ -607,6 +604,8 @@ class WaterMarker():
             ratio:float =  min((canvas_width - canvas_padx * 2) / width, (canvas_height - canvas_pady * 2) / height) 
         elif type == 'mark':
             ratio:float =  min(mark_width/width, mark_height/height) 
+        elif type == 'text':
+            ratio = min(self.image_width_scale, self.image_height_scale)
         size:tuple[int, int] = math.floor(width * ratio), math.floor(height * ratio)
         return size
     
@@ -617,7 +616,7 @@ class WaterMarker():
         Args:
             event (_type_): see text_size_calculate()
         """
-        user_enter = self.entry_font.get()
+        user_enter = self.user_enter_font.get()
         if self.font_changed():
             if user_enter not in self.include_fonts:
                 messagebox.showerror(
@@ -625,9 +624,9 @@ class WaterMarker():
                     message=f"font entered: '{user_enter}',\nmake sure everything was correct, or select one instead.")
             
     def font_changed(self) -> bool:
-        if self.entry_font.get() == self.user_enter_font_store and self.selector_font.get() == self.user_select_font_store:
+        if self.user_enter_font == self.user_enter_font_store and self.selector_font.get() == self.user_select_font_store:
             return False
-        self.user_enter_font_store = self.entry_font.get()
+        self.user_enter_font_store = self.user_enter_font
         self.user_select_font_store = self.selector_font.get()
         return True
     
@@ -651,9 +650,9 @@ class WaterMarker():
             method (str): user action, 'clicked' or 'motion'.
         """
         if method == 'clicked':
-            self.canvas.delete(self.watermark)
+            self.canvas.delete(self.canvas_mark)
         elif method == 'motion':
-            self.canvas.delete(self.watermark_preview)
+            self.canvas.delete(self.canvas_mark_preview)
     
     def draw_watermark(self, x:int, y:int, method:str) -> None:
         """
@@ -665,9 +664,9 @@ class WaterMarker():
             method (str): user action, 'clicked' or 'motion'.
         """
         if method == 'clicked':
-            self.watermark = self.canvas.create_image(x, y, image=self.mark, anchor='nw')
+            self.canvas_mark = self.canvas.create_image(x, y, image=self.mark, anchor='nw')
         elif method == 'motion':
-            self.watermark_preview = self.canvas.create_image(x, y, image=self.ghost, anchor='nw')
+            self.canvas_mark_preview = self.canvas.create_image(x, y, image=self.ghost, anchor='nw')
        
     def mouse_loc_calibrate(self, x:int, y:int) -> tuple[int, int, tuple[int,int]|None]:
         """
@@ -683,7 +682,7 @@ class WaterMarker():
 
         Returns:
             tuple[int, int, tuple[int,int]|None]: (x_calibrated, y_calibrated, (x_snap_position, y_snap_position)|None), None if watermark isn't snapped to border of image.
-        """
+        """        
         # TODO: add a self.current_minax: tuple[int, int, int, int] to store xyminmax to use later as snap_location ??
         x_min = self.image_datum_x + self.mark_offset_x_min
         y_min = self.image_datum_y + self.mark_offset_y_min
