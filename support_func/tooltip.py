@@ -1,6 +1,7 @@
 import tkinter as tk
-from tkinter import font
-from string import ascii_letters
+
+from matplotlib import font_manager
+from PIL import ImageFont
 
 class ToolTip(object):
     """
@@ -21,9 +22,9 @@ class ToolTip(object):
         y = self.widget.winfo_rooty() + 45
         self.tip_window = tk.Toplevel(self.widget)
         self.tip_window.config(borderwidth=1, background="black")
-        self.tip_window.overrideredirect(True)
-        self.tip_window.geometry(f"+{x}+{y}")
-        tk.Label(self.tip_window, text=self.text, background="light yellow").pack()
+        self.tip_window.wm_overrideredirect(True)
+        self.tip_window.wm_geometry(f"+{x}+{y}")
+        tk.Label(self.tip_window, text=self.text, background="light yellow").pack(side='left')
 
     def hidetip(self):
         exist_window = self.tip_window
@@ -46,3 +47,55 @@ def add_tool_tip(widget:tk.Widget, text:str):
         toolTip.hidetip()
     widget.bind('<Enter>', enter)
     widget.bind('<Leave>', leave)
+
+def get_sysfont_sorted() -> dict[str, dict[str, str]]:
+    """
+    get every font's name, filename, weight in path: C:/Windows/Fonts into a dict,
+    change the names of some(commonly used) Chinese-supported(zh-TW) fonts to Chinese.
+    
+    #! this function assumes any font file only correspond with a unique style with the same font name.
+    #! this function is not suitable for more then one correspond between style and file.
+    
+    C:/Windows/Fonts:
+    ├──file_1.ttf    # font name:a, style: 1
+    ├──file_2.ttf    # font name:a, style: 2
+    ├──file_3.ttf    # font name:a, style: 3
+    ├──file_4.ttf    # font name:a, style: 3
+    ├──file_5.ttf    # font name:b, style: 1
+    └──file_6.ttf    # font name:c, style: 2
+    └──file_7.ttf    # font name:c, style: 3
+    -> only file_3.ttf will be lost. 
+    # * only return the last file of the the same font name and style got looped by this function.
+    
+    Returns:
+        dict[str, dict[str, list[str]]]: {'font name': {'weight': ['...', ...], 'fname': 'file name', ...]}, ...}
+    """
+    sysfonts = font_manager.findSystemFonts()
+    fonts_dict:dict[str, dict[str, str]] = {}
+
+    # cite: https://en.wikipedia.org/wiki/List_of_typefaces_included_with_Microsoft_Windows
+    fname_table = {
+        'MingLiU': '新細明體',
+        "DFKai-SB": '標楷體',
+        'Microsoft JhengHei': '微軟正黑體',
+        'Microsoft YaHei': '微軟雅黑體',
+        'SimSun': '中易宋體',
+    }
+
+    # cite: https://stackoverflow.com/questions/75310650/how-to-get-font-path-from-font-name-python
+    for filepath in sysfonts: 
+        font = ImageFont.FreeTypeFont(filepath)
+        try:
+            name, style = font.getname()
+            assert name and style
+        except AssertionError:
+            continue
+        _, file_name = filepath.rsplit("\\", maxsplit=1)
+        if name in fname_table:
+            font_name = fname_table[name]
+        else:
+            font_name = name
+        if font_name not in fonts_dict.keys():
+            fonts_dict[font_name] = {}
+        fonts_dict[font_name][style] = file_name
+    return dict(fonts_dict.items())

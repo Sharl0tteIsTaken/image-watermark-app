@@ -8,27 +8,32 @@ from PIL import Image, ImageDraw, ImageFont, ImageTk, ImageFilter
 from string import ascii_letters
 from tkinter import colorchooser, filedialog, font, messagebox, ttk
 
+from typing import Literal
+from typing_extensions import TypeAlias
+
 # default key dimensions
 window_width = 1400
 window_height = 700
+
 canvas_width = 860
 canvas_height = 560
 canvas_padx = 30
 canvas_pady = 30
+
 mark_width = 50
 mark_height = 50
-default_font = ("Arial", 16, "normal") #
+
 text_watermark_max_size = (2000, 2000)
 
-# TODO: make sure all docstring is updated
+default_font = ("Arial", 16, "normal")
+default_fname = 'Arial'
+styles = ['Regular', 'Narrow Bold Italic', 'Bold', 'Narrow Bold', 'Narrow Italic', 'Narrow', 'Bold Italic', 'Black', 'Italic'] 
+default_style = sorted(styles)
 
-font_info = "\
-rule of font:\n\
-1. will prioritise font selected than entered.\n\
-2. entered font will be ignored if not found.\n\
-3. if didn't select a font or not entered/found\n\
-   default font is selected."
-# FIXME:  typeset font_info. guess it will be at tooltip.py
+_state: TypeAlias = Literal["mark", "text"]
+
+
+# TODO: make sure all docstring is updated, and if event have type
 
 watermark_fp = "watermark_text.png" # TODO: [later] get this a location to stay
 
@@ -58,6 +63,7 @@ class WaterMarker():
         self.load_setup_default_()
         self.setup_widget()
         
+        self.update_switch_button()
         self.text_mark_maker()
         
         
@@ -72,18 +78,19 @@ class WaterMarker():
         - exist_mark
         - text_calibrate
         """
+        self.switch_state:_state = "text" # TODO: [last] see how effective is this TypeAlias thing
+        self.filepath_image:str|None = None
+        self.filepath_mark:str|None = None
+        
         self.exist_image = False
         self.exist_mark = False
-        self.mark_pending = False
-        self.text_calibrate = False
-        self.current_font_hexcolor = "black"
-        self.user_select_font_store = 'select a font'
-        self.current_font_rgb:tuple[int,int,int] = (0, 0, 0)
         
-        fonts:list[str] = list(font.families())
-        mixed:list[str] = [font for font in fonts[:] if font[0] != "@"]
-        chinese:list[str] = [font for font in mixed[:] if font[0] not in ascii_letters]
-        self.include_fonts:list[str] = sorted(mixed) + sorted(chinese)
+        self.current_font_hexcolor = "black"
+        self.current_font_rgb:tuple[int,int,int] = (0, 0, 0)
+        self.fonts_dict:dict[str, dict[str, str]] = support_func.get_sysfont_sorted()
+        self.font_names:list[str] = sorted(list(self.fonts_dict.keys()))
+        
+        self.user_select_font_store = 'select a font'
         
     def setup_variable(self) -> None:
         """
@@ -95,7 +102,7 @@ class WaterMarker():
         self.user_enter_text = tk.StringVar()
         self.user_enter_text.set("enter text as watermark")
         
-        self.user_enter_font = tk.StringVar()
+        self.user_enter_font = tk.StringVar() #TODO: get rid of this
         self.user_enter_font.set("enter font")
         self.user_enter_font_store = self.user_enter_font.get()
         
@@ -110,27 +117,30 @@ class WaterMarker():
         - block_image
         - block_panel
         """
-        self.block_panel = tk.LabelFrame(self.window, text="open file", bg="white")
-        self.block_panel.grid(column=0, row=0, columnspan=1) # TODO: why colspan 1?
+        self.block_open = tk.LabelFrame(self.window, text="open file", bg="white",)
+        self.block_open.grid(column=0, row=0, padx=5, pady=5, sticky='w')
+        
+        self.block_panel = tk.LabelFrame(self.window, text="control panel", bg="white")
+        self.block_panel.grid(column=1, row=0, padx=5, sticky='w')
+        
+        self.block_clear = tk.LabelFrame(self.window, text="remove in canvas", bg="white")
+        self.block_clear.grid(column=1, row=0, padx=(250, 0), sticky='w')
         
         self.block_image = tk.LabelFrame(self.window, bg="white", border=0)
-        self.block_image.grid(column=0, row=1, ipadx=10, ipady=10)
+        self.block_image.grid(column=0, row=1, padx=10, pady=10)
         
         self.block_edit = tk.LabelFrame(self.window, text="font of text", bg="white", padx=10, pady=10)
-        self.block_edit.grid(column=1, row=1, sticky='nw')
+        self.block_edit.grid(column=1, row=1, padx=5, sticky='nw')
         
         self.block_text_preview = tk.LabelFrame(self.window, text="text watermark preview", bg="white", padx=10, pady=10)
-        self.block_text_preview.grid(column=1, row=1, sticky='s')
+        self.block_text_preview.grid(column=1, row=1, padx=5, pady=(300, 10), sticky='nsew', columnspan=3)
     
     def load_setup_default_(self):
         # TODO: [later] move to load_asset() load asset for UI
         self.default_image = self.proper_load(filepath='assets/img/default_image.png', type='image')
         self.image_width_scale = self.image_pil.width / self.default_image.width()
         self.image_height_scale = self.image_pil.height / self.default_image.height()
-        
-        self.switch_r = self.proper_load(filepath="assets/img/switch-right.png", type='image', max_size=(100,50))
-        self.switch_l = self.proper_load(filepath="assets/img/switch-left.png", type='image', max_size=(100,50))
-    
+
     def setup_widget(self) -> None:
         """
         create and place every widget.
@@ -149,53 +159,68 @@ class WaterMarker():
         
         self.canvas_image_default = self.canvas.create_image(canvas_width/2, canvas_height/2, image=self.default_image, anchor='center')
         
+        # block open
+        self.btn_open_image = tk.Button(self.block_open, text="image", command=self.load_image)
+        self.btn_open_image.grid(column=0, row=0, padx=2, pady=2)
+        
+        self.btn_open_mark = tk.Button(self.block_open, text="watermark", command=self.load_mark)
+        self.btn_open_mark.grid(column=1, row=0, padx=2, pady=2)
+        
+        # block window
+        self.btn_save = tk.Button(self.window, text='save', command=self.save_image)
+        self.btn_save.grid(column=0, row=0, padx=30, pady=12, sticky='es')
+        
         # block panel
-        self.btn_open_image = tk.Button(self.block_panel, text="image", command=self.load_image)
-        self.btn_open_image.grid(column=0, row=0)
+        self.btn_switch_image = tk.Button(self.block_panel, text="image", command=self.image_mode) # type: ignore
+        self.btn_switch_image.grid(column=0, row=0, padx=2, pady=2)
         
-        self.btn_open_mark = tk.Button(self.block_panel, text="watermark", command=self.load_mark)
-        self.btn_open_mark.grid(column=1, row=0)
+        self.btn_switch_text = tk.Button(self.block_panel, text="text", command=self.text_mode) # type: ignore
+        self.btn_switch_text.grid(column=1, row=0, padx=2, pady=2)
         
-        self.btn_switch = tk.Button(self.block_panel, image=self.switch_r, command=self.switch_button) # type: ignore
-        self.btn_switch.grid(column=2, row=0)
+        # block clear
+        self.btn_clear_preview = tk.Button(
+            self.block_clear, text="preview", 
+            command= lambda: self.remove_exist_watermark(method='motion')
+            ) # type: ignore
+        self.btn_clear_preview.grid(column=2, row=0, padx=2, pady=2)
         
-        self.btn_save = tk.Button(self.block_panel, text='Save', command=self.save_image)
-        self.btn_save.grid(column=3, row=0)
+        self.btn_clear_mark = tk.Button(
+            self.block_clear, text="watermark", 
+            command= lambda: self.remove_exist_watermark(method='clicked')
+            ) # type: ignore
+        self.btn_clear_mark.grid(column=3, row=0, padx=2, pady=2)
         
         # block edit
+        row = 0
         self.lbl_text = tk.Label(self.block_edit, text="text", bg='white')
-        self.lbl_text.grid(column=0, row=0)
+        self.lbl_text.grid(column=0, row=row, sticky='w')
         
         self.entry_text = tk.Entry(self.block_edit, textvariable=self.user_enter_text, cursor='xterm', width=30)
-        self.entry_text.bind("<Button-1>", lambda event: self.clear_tkentry_text(event, tag='text'))
-        self.entry_text.grid(column=1, row=0)
+        self.entry_text.bind("<Button-1>", self.clear_tkentry_text)
+        self.entry_text.grid(column=1, row=row)
         
+        row = 1
+        self.lbl_font = tk.Label(self.block_edit, text="font", bg='white')
+        self.lbl_font.grid(column=0, row=row, sticky='w')
         
-        self.lbl_font = tk.Label(self.block_edit, text="fontⓘ", bg='white')
-        support_func.add_tool_tip(self.lbl_font, font_info)
-        self.lbl_font.grid(column=0, row=1, rowspan=2)
-        
-        self.entry_font = tk.Entry(self.block_edit, textvariable=self.user_enter_font, width=30)
-        self.entry_font.bind("<Button-1>", lambda event: self.clear_tkentry_text(event, tag='font'))
-        self.entry_font.bind("<Return>", self.validate_font) # type: ignore
-        self.entry_font.grid(column=1, row=1)
-        
-        self.lbl_font = tk.Label(self.block_edit, text="or", width=3, bg='white')
-        self.lbl_font.grid(column=2, row=1)
-        
-        self.selector_font = ttk.Combobox(self.block_edit, values=('select a font',), width=32)
+        self.selector_font = ttk.Combobox(self.block_edit, values=[default_fname], width=28)
         self.selector_font.current(0)
-        self.selector_font['values'] = self.include_fonts
-        self.selector_font.bind(
-            "<<ComboboxSelected>>", 
-            lambda event: 
-                self.user_enter_font.set(self.selector_font.get()), 
-                self.text_mark_maker) # type: ignore
-        self.selector_font.grid(column=1, row=2, columnspan=2)
+        self.selector_font['values'] = self.font_names
+        self.selector_font.bind("<<ComboboxSelected>>", self.font_selected) # type: ignore
+        self.selector_font.grid(column=1, row=row, sticky='w')
         
+        row = 2
+        self.lbl_fontstyle = tk.Label(self.block_edit, text="style", bg='white')
+        self.lbl_fontstyle.grid(column=0, row=row, sticky='w')
         
+        self.selector_fstyle = ttk.Combobox(self.block_edit, values=default_style, width=20)
+        self.selector_fstyle.set('Regular')
+        self.selector_fstyle.bind("<<ComboboxSelected>>", self.text_mark_maker) # type: ignore
+        self.selector_fstyle.grid(column=1, row=row, sticky='w')
+        
+        row = 3
         self.lbl_fontsize = tk.Label(self.block_edit, text="size", bg='white')
-        self.lbl_fontsize.grid(column=0, row=3)
+        self.lbl_fontsize.grid(column=0, row=row, sticky='w')
         
         self.spnbx_fontsize = tk.Spinbox(
             self.block_edit, 
@@ -203,29 +228,19 @@ class WaterMarker():
             command=self.text_mark_maker, 
             textvariable=self.user_enter_fontsize, 
             width=4)
-        self.spnbx_fontsize.grid(column=1, row=3, sticky='w')
+        self.spnbx_fontsize.grid(column=1, row=row, sticky='w')
         
-        
-        self.lbl_fontstyle = tk.Label(self.block_edit, text="style", bg='white')
-        self.lbl_fontstyle.grid(column=0, row=4)
-        
-        self.selector_fontstyle = ttk.Combobox(self.block_edit, width=8)
-        self.selector_fontstyle['values'] = ('normal', 'bold', 'italic', 'bold and italic')
-        self.selector_fontstyle.current(0)
-        self.selector_fontstyle.bind("<<ComboboxSelected>>", self.text_mark_maker) # type: ignore
-        self.selector_fontstyle.grid(column=1, row=4, sticky='w')
-
-        
+        row = 4
         self.lbl_color = tk.Label(self.block_edit, text="color", bg='white')
-        self.lbl_color.grid(column=0, row=5)
+        self.lbl_color.grid(column=0, row=row, sticky='w')
         
         self.btn_color_chooser = tk.Button(self.block_edit, text="select a color", command=self.choose_color)
-        self.btn_color_chooser.grid(column=1, row=5, sticky='w')
+        self.btn_color_chooser.grid(column=1, row=row, sticky='w')
         
-        # TODO: add transparency % bar to self.block_edit
         # TODO: add checkbox of preview watermark
-        self.lbl_opaque = tk.Label(self.block_edit, text="opaque", bg='white') # TODO: change to alpha(saturation)
-        self.lbl_opaque.grid(column=0, row=6) # TODO: add tool tip: no preview for alpha
+        row = 5
+        self.lbl_opaque = tk.Label(self.block_edit, text="opaque", bg='white')
+        self.lbl_opaque.grid(column=0, row=row, sticky='w')
         
         self.scale_opaque = tk.Scale(
             self.block_edit, 
@@ -233,14 +248,14 @@ class WaterMarker():
             command=self.text_mark_maker, 
             orient='horizontal', 
             bg='white', 
-            width=10)
+            length=138)
         self.scale_opaque.set(100)
-        self.scale_opaque.grid(column=1, row=6, sticky='w')
+        self.scale_opaque.grid(column=1, row=row, sticky='w')
         
-        
+        row = 6
         self.btn_confirm = tk.Button(self.block_edit, text='update', command=self.text_mark_maker)
-        self.btn_confirm.grid(column=1, row=7, sticky='w')
-        
+        self.btn_confirm.grid(column=1, row=row, sticky='w')
+        # support_func.add_tool_tip(self.btn_confirm, ) # TODO: [last] add tool tip?
         
         
         
@@ -331,7 +346,8 @@ class WaterMarker():
         bind canvas with user action,
         calls to update watermark offset.
         """
-        self.ghost = self.mark = self.proper_load(filepath='assets/img/watermark.png', type='mark')
+        self.filepath_mark = 'assets/img/200x200.png'
+        self.ghost = self.mark = self.proper_load(filepath=self.filepath_mark, type='mark')
         #self.ghost = self.mark = self.proper_load(filepath=filedialog.askopenfilename(), type='mark')
         
         self.exist_mark = True
@@ -371,6 +387,18 @@ class WaterMarker():
         self.mark_offset_x_max = self.mark.width() - self.mark_offset_x_min
         self.mark_offset_y_max = self.mark.height() - self.mark_offset_y_min
         
+    def font_selected(self, event=None) -> None:
+        rq_font = self.selector_font.get()
+        
+        style = sorted(list(self.fonts_dict[rq_font].keys()))
+        if len(style) > 1:
+            self.selector_fstyle['values'] = ['select a style']
+            self.selector_fstyle.current(0)
+            self.selector_fstyle['values'] = style
+        else:
+            self.selector_fstyle['values'] = style
+            self.selector_fstyle.current(0)
+        
     def text_mark_maker(self, event=None) -> None:
         """
         calculate text size by create a temporary text on canvas
@@ -382,30 +410,19 @@ class WaterMarker():
         2. takes 1 positional argument but 2 were given
         one will be raised, so added event=None in args, but that has no effect(fingers crossed).
         """
-        self.validate_font()
-        if self.selector_font.get() == 'select a font' and self.entry_font.get() == 'enter font':
-            request_font = default_font[0]
-        elif self.selector_font.get() != 'select a font':
-            request_font = self.selector_font.get()
-        elif self.entry_font.get() != 'enter font':
-            if self.entry_font.get() in self.include_fonts:
-                request_font = self.entry_font.get()
-            else:
-                request_font = default_font[0]
+        name = self.selector_font.get()
+        style = self.selector_fstyle.get()
+        rq_font = self.fonts_dict[name][style] # rq: requested
+        pixel_size = self.user_enter_fontsize.get() / 0.75
 
-        self.current_font = (
-            request_font, 
-            self.user_enter_fontsize.get(), 
-            self.selector_fontstyle.get())
-
-        pixel_size = (self.current_font[1] / 0.75)
-        fnt = ImageFont.truetype("arial.ttf", size=pixel_size) # TODO: get foo += ".ttf" & foo += "bi" / "bl" / "i" before this line
+        fnt = ImageFont.truetype(font=rq_font, size=pixel_size) 
         
         # to get border of the text from PIL
         _ = Image.new("RGBA", text_watermark_max_size, (255, 255, 255, 0))
         f = ImageDraw.Draw(_)
         f_bbox = f.textbbox((0, 0), self.user_enter_text.get(), font=fnt)
         
+        # TODO: set offset to be configurable
         width = f_bbox[2] - f_bbox[0] + 2 + 5 # // offsets by eyeballing it. see source in root/test.py
         height = f_bbox[3] - f_bbox[1] + 5 # // offsets by eyeballing it
         
@@ -414,14 +431,15 @@ class WaterMarker():
             txt = Image.new("RGBA", base.size, (255, 255, 255, 0))
             d = ImageDraw.Draw(txt)
             
+            # TODO: set offset to be configurable
             offset = (3, -3) # // offsets by eyeballing it. see source in root/test.py
             alpha:int = round(np.round(255 * (self.scale_opaque.get() / 100)))
-            text_color = 255, 0, 0, alpha # *self.current_font_rgb
+            text_color = *self.current_font_rgb, alpha # 
             
             d.text(offset, self.user_enter_text.get(), font=fnt, fill=text_color)
             out = Image.alpha_composite(base, txt)
             out.save(watermark_fp)
-        
+            
         self.ghost = self.mark = self.proper_load(filepath=watermark_fp, type="text")
         
         x, y = round(self.canvas.winfo_width() / 2), round(self.canvas.winfo_height() / 2)
@@ -430,7 +448,6 @@ class WaterMarker():
         self.update_mark_offset(type='text', bbox=bbox)
         self.canvas.delete(temp)
         
-        # TODO: change this to image
         self.lbl_watermark_text_preview = tk.Label(self.block_text_preview, image=self.mark, bg='white') # type: ignore
         self.lbl_watermark_text_preview.grid(column=1, row=5, sticky='w')
     
@@ -459,97 +476,51 @@ class WaterMarker():
             y = np.round(true_y * self.image_height_scale)
         offset = (round(x), round(y))
 
-        # width = np.round(self.mark.width() * self.image_height_scale)
-        # height = np.round(self.mark.height() * self.image_width_scale)
-        # size = (round(width), round(height))
-
-        # resized_mark = self.mark_pil.resize(size)
         mark = self.mark_pil.copy()
         
         result_image = self.image_pil.copy()
-        # result_image.paste(resized_mark, offset)
         result_image.alpha_composite(mark, offset)
         result_image.save("result.png", quality=100)
         
-        # elif self.watermark_contain == 'text':
-        #     if self.snap:
-        #         x = np.round(self.snap[0] * self.image_width_scale)
-        #         y = np.round(self.snap[1] * self.image_height_scale)
-                
-        #         if self.snap[0] == self.image.width():
-        #             x -= self.text_width / 0.75
-        #         if self.snap[1] == self.image.height():
-        #             y -= self.text_height / 0.75
-        #         print("save, position", (x, y))
-        #         print(F"fomula = ({x} + {self.text_width}) / {self.image_width_scale}, ({y} + {self.text_height}) / {self.image_height_scale}")
-        #         print(f"{(x + self.text_width) / self.image_width_scale, (y + self.text_height)/self.image_height_scale}")
-
-        #     else:
-        #         true_x = self.true_position[0] - self.text_offset_x_min - self.image_datum_x
-        #         true_y = self.true_position[1] - self.text_offset_y_min - self.image_datum_y
-                
-        #         x = np.round(true_x * self.image_width_scale)
-        #         y = np.round(true_y * self.image_height_scale)
-                
-        #     offset = (round(x), round(y))
-            
-        #     scale = (self.image_width_scale + self.image_height_scale) / 2
-            
-        #     text = self.user_enter_text.get()
-        #     r, g, b = self.current_font_rgb
-        #     alpha = round(np.round(255 * (self.scale_opaque.get() / 100)))
-            
-        #     rq_font, rq_fontsize, request_style = self.current_font # rq: requested
-            
-        #     size = (rq_fontsize * scale) / 0.75 # font size * 0.75 = pixel, ImageFont.truetype uses pixel
-            
-        #     # cite: https://stackoverflow.com/questions/1815165/draw-bold-italic-text-with-pil#comment136704224_1815170
-        #     if request_style == "bold":
-        #         rq_font += 'bd'
-        #     elif request_style == "italic":
-        #         rq_font += 'i'
-        #     elif request_style == "bold and italic":
-        #         rq_font += 'bi'
-        #     rq_font += '.ttf'
-        #     # print(rq_font.lower(), fontsize, alpha, self.scale_opaque.get())
-        #     fnt = ImageFont.truetype(rq_font.lower(), size) 
-            
-        #     # cite: https://pillow.readthedocs.io/en/stable/reference/ImageDraw.html#example-draw-partial-opacity-text
-        #     with Image.open(self.filepath_image).convert("RGBA") as image:
-        #         watermark = Image.new("RGBA", image.size, (255, 255, 255, 0))
-
-        #         d = ImageDraw.Draw(watermark)
-        #         d.text(offset, text, font=fnt, fill=(r, g, b, alpha))
-        #         d.circle(offset, radius=1, fill='red')
-                
-        #         result = Image.alpha_composite(image, watermark)
-        #         result.save("result.png")
-    
-    # functions bind with command/action
-    def switch_button(self) -> None:
+    # functions bind with command/action # TODO: [last]sort this
+    def image_mode(self) -> None:
+        self.switch_state = 'mark'
+        if self.filepath_mark is None:
+            self.btn_switch_text.config(relief='sunken')
+            messagebox.showwarning(title="Missing something", message="open a image file for watermark first!")
+        else:
+            self.update_switch_button()
+        
+    def text_mode(self) -> None:
+        self.switch_state = 'text'
+        self.update_switch_button()
+        
+    def update_switch_button(self) -> None:
         """
         switch watermark to image or text, not-the-current one,
         remove previous created watermark and preview.
         """
-        self.btn_switch.config(image=self.switch_l) # type: ignore
+        if self.switch_state == 'mark':
+            self.btn_switch_image.config(relief='sunken')
+            self.btn_switch_text.config(relief='raised')
+        elif self.switch_state == 'text':
+            self.btn_switch_image.config(relief='raised')
+            self.btn_switch_text.config(relief='sunken')
         try:
             self.canvas.delete(self.canvas_mark_preview)
             self.canvas.delete(self.canvas_mark)
         except AttributeError:
             print("making sure to remove unwanted watermarks")
-        
-    def clear_tkentry_text(self, event, tag:str) -> None:
+    
+    def clear_tkentry_text(self, event=None) -> None:
         """
         remove default text in tk.Entry, when user click in tk.Entry
         and bind M1 to function:self.entry_action.
 
         Args:
-            event (_type_): _description_ #TODO: [last] check if anything need to be here
+            event (_type_): _description_ 
         """
-        if tag == 'text':
-            self.user_enter_text.set("")
-        elif tag == 'font':
-            self.user_enter_font.set("")
+        self.user_enter_text.set("")
         self.entry_text.bind("<Button-1>", self.entry_action)
         self.entry_action(event) # make sure first click also force calibrate
         
@@ -559,9 +530,8 @@ class WaterMarker():
         this will mark watermark(text) to calibrate when user click on canvas.
 
         Args:
-            event (_type_): _description_ #TODO: [last] check if anything need to be here
+            event (_type_): _description_ 
         """
-        self.text_calibrate = False
         self.exist_mark = False
     
     def canvas_action(self, event, *, method:str) -> None:
@@ -570,7 +540,7 @@ class WaterMarker():
         manage everything after click and mouse movement.
 
         Args:
-            event (_type_): _description_ #TODO: [last] check if anything need to be here
+            event (_type_): _description_ 
             method (str): user action on canvas, 'clicked' or 'motion'.
         """
         try:
@@ -608,27 +578,6 @@ class WaterMarker():
             ratio = min(self.image_width_scale, self.image_height_scale)
         size:tuple[int, int] = math.floor(width * ratio), math.floor(height * ratio)
         return size
-    
-    def validate_font(self, event=None) -> None:
-        """
-        validate font from user, use messagebox to show error when font not exist.
-        
-        Args:
-            event (_type_): see text_size_calculate()
-        """
-        user_enter = self.user_enter_font.get()
-        if self.font_changed():
-            if user_enter not in self.include_fonts:
-                messagebox.showerror(
-                    title="font not found.", 
-                    message=f"font entered: '{user_enter}',\nmake sure everything was correct, or select one instead.")
-            
-    def font_changed(self) -> bool:
-        if self.user_enter_font == self.user_enter_font_store and self.selector_font.get() == self.user_select_font_store:
-            return False
-        self.user_enter_font_store = self.user_enter_font
-        self.user_select_font_store = self.selector_font.get()
-        return True
     
     def choose_color(self) -> None:
         color_code = colorchooser.askcolor(title ="Choose a color") 
@@ -683,7 +632,6 @@ class WaterMarker():
         Returns:
             tuple[int, int, tuple[int,int]|None]: (x_calibrated, y_calibrated, (x_snap_position, y_snap_position)|None), None if watermark isn't snapped to border of image.
         """        
-        # TODO: add a self.current_minax: tuple[int, int, int, int] to store xyminmax to use later as snap_location ??
         x_min = self.image_datum_x + self.mark_offset_x_min
         y_min = self.image_datum_y + self.mark_offset_y_min
         x_max = self.image_datum_x + self.image.width() - self.mark_offset_x_max
