@@ -156,17 +156,17 @@ class WaterMarker():
         self.block_image.grid(column=0, row=1, padx=10, pady=10, rowspan=3)
         
         self.block_edit = tk.LabelFrame(self.window, text="font of text", bg="white", padx=10, pady=2)
-        self.block_edit.grid(column=1, row=1, padx=5, sticky='n')
+        self.block_edit.grid(column=1, row=1, padx=(0, 5))
         self.block_bg = tk.LabelFrame(self.block_edit, bg="light grey", pady=2)
         self.block_bg.grid(column=0, row=5, columnspan=2, padx=(0, 0), pady=(0, 0), sticky='w')
         self.block_more = tk.LabelFrame(self.block_edit, bg="light grey", pady=2)
         self.block_more.grid(column=1, row=3, padx=(165, 0), pady=(8, 0), sticky='nsew', rowspan=3)
         
         self.block_panel = tk.LabelFrame(self.window, text="watermark edit", bg="white", pady=2)
-        self.block_panel.grid(column=1, row=2, padx=5, sticky='nsew')
+        self.block_panel.grid(column=1, row=2, padx=5, sticky='n')
         
         self.block_mark_preview = tk.LabelFrame(self.window, text="watermark preview", bg="white", padx=10, pady=10)
-        self.block_mark_preview.grid(column=1, row=3, ipady=80, padx=5, pady=(0, 10), sticky='nsew')
+        self.block_mark_preview.grid(column=1, row=3, padx=5, pady=(0, 10), sticky='ns')
     
     def load_setup_default_(self):
         # TODO: [later] move to load_asset() load asset for UI
@@ -316,7 +316,7 @@ class WaterMarker():
             self.block_edit, 
             from_=3, to=216, 
             command=self.text_mark_maker, 
-            # textvariable=self.usrntr_fontsize, 
+            textvariable=self.usrntr_fontsize, 
             width=4)
         self.spnbx_fontsize.grid(column=1, row=row, padx=(210, 0), sticky='w')
         
@@ -803,8 +803,7 @@ class WaterMarker():
             if color_code[1] is not None:
                 self.current_font_rgb, self.current_font_hexcolor = color_code
                 self.lbl_watermark_preview.config(fg=self.current_font_hexcolor)
-            else:
-                self.current_font_hexcolor = 'black'
+                self.text_mark_maker()
         elif tg == 'bg':
             if color_code[0] is not None:
                 self.mark_bg, _ = color_code
