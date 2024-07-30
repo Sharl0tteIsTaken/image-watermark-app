@@ -58,7 +58,7 @@ class WaterMarker():
     """
     def __init__(self) -> None:
         self.window = tk.Tk()
-        self.window.title("💧MarkIt.")
+        self.window.title("💧MarkIt.") # TODO: set color of 💧 to blue
         self.window.geometry(f"{window_width}x{window_height}")
         # self.window.resizable(width=False, height=False)
         self.window.option_add("*Font", default_font)
@@ -73,6 +73,7 @@ class WaterMarker():
         self.update_switch_button()
         self.text_mark_maker()
         
+        self.window.option_add("*Dialog.msg.font", "Arial -16")
         
         
     def setup_attribute(self) -> None:
@@ -96,9 +97,7 @@ class WaterMarker():
         self.current_font_rgb:tuple[int,int,int] = (0, 0, 0)
         self.fonts_dict:dict[str, dict[str, str]] = support_func.get_sysfont_sorted()
         self.font_names:list[str] = sorted(list(self.fonts_dict.keys()))
-        
-        self.user_select_font_store = 'select a font'
-        
+                
     def setup_variable(self) -> None:
         """
         create every variable for widgets.
@@ -107,12 +106,8 @@ class WaterMarker():
         - user_enter_text
         """
         # usrntr = user enter
-        self.usrntr_text = tk.StringVar()
+        self.usrntr_text = tk.StringVar() # TODO: order this
         self.usrntr_text.set("enter text as watermark")
-        
-        self.usrntr_font = tk.StringVar() #TODO: get rid of this
-        self.usrntr_font.set("enter font")
-        self.usrntr_font_store = self.usrntr_font.get()
         
         self.usrntr_fontsize = tk.IntVar()
         self.usrntr_fontsize.set(default_font[1])
@@ -127,8 +122,10 @@ class WaterMarker():
         self.usrntr_offset_h = tk.IntVar()
         self.usrntr_offset_h.set(default_offset_h)
         
+        # checkbutton variables, set value after checkbutton is created
         self.show_mark_bg = tk.BooleanVar()
-        self.show_mark_bg.set(False)
+        self.show_preview = tk.BooleanVar()
+        self.snap = tk.BooleanVar()
         
         self.mark_bg = grey
 
@@ -143,22 +140,33 @@ class WaterMarker():
         self.block_open = tk.LabelFrame(self.window, text="open file", bg="white",)
         self.block_open.grid(column=0, row=0, padx=10, pady=5, sticky='w')
         
-        self.block_panel = tk.LabelFrame(self.window, text="control panel", bg="white")
-        self.block_panel.grid(column=1, row=0, padx=5, sticky='w')
+        self.block_canvas = tk.LabelFrame(self.window, text="canvas control", bg="white",)
+        self.block_canvas.grid(column=0, row=0)
         
-        self.block_clear = tk.LabelFrame(self.window, text="remove in canvas", bg="white")
+        self.block_save = tk.LabelFrame(self.window, bg="white",)
+        self.block_save.grid(column=0, row=0, sticky='e')
+        
+        self.block_switch = tk.LabelFrame(self.window, text="💧mark with", bg="white")
+        self.block_switch.grid(column=1, row=0, padx=5, sticky='w')
+        
+        self.block_clear = tk.LabelFrame(self.window, text="remove in canvas", bg="white") # TODO: swap position with block save
         self.block_clear.grid(column=1, row=0, padx=(250, 0), sticky='w')
         
         self.block_image = tk.LabelFrame(self.window, bg="white", border=0)
-        self.block_image.grid(column=0, row=1, padx=10, pady=10)
+        self.block_image.grid(column=0, row=1, padx=10, pady=10, rowspan=3)
         
-        self.block_edit = tk.LabelFrame(self.window, text="font of text", bg="white", padx=10, pady=10)
-        self.block_edit.grid(column=1, row=1, padx=5, sticky='nw')
+        self.block_edit = tk.LabelFrame(self.window, text="font of text", bg="white", padx=10, pady=2)
+        self.block_edit.grid(column=1, row=1, padx=5, sticky='n')
+        self.block_bg = tk.LabelFrame(self.block_edit, bg="light grey", pady=2)
+        self.block_bg.grid(column=0, row=5, columnspan=2, padx=(0, 0), pady=(0, 0), sticky='w')
         self.block_more = tk.LabelFrame(self.block_edit, bg="light grey", pady=2)
-        self.block_more.grid(column=1, row=3, padx=(150, 0), pady=(8, 0), sticky='nsew', rowspan=4)
+        self.block_more.grid(column=1, row=3, padx=(165, 0), pady=(8, 0), sticky='nsew', rowspan=3)
         
-        self.block_text_preview = tk.LabelFrame(self.window, text="text watermark preview", bg="white", padx=10, pady=10)
-        self.block_text_preview.grid(column=1, row=1, padx=5, pady=(320, 10), sticky='nsew', columnspan=3)
+        self.block_panel = tk.LabelFrame(self.window, text="watermark edit", bg="white", pady=2)
+        self.block_panel.grid(column=1, row=2, padx=5, sticky='nsew')
+        
+        self.block_mark_preview = tk.LabelFrame(self.window, text="watermark preview", bg="white", padx=10, pady=10)
+        self.block_mark_preview.grid(column=1, row=3, ipady=80, padx=5, pady=(0, 10), sticky='nsew')
     
     def load_setup_default_(self):
         # TODO: [later] move to load_asset() load asset for UI
@@ -191,16 +199,55 @@ class WaterMarker():
         self.btn_open_mark = tk.Button(self.block_open, text="watermark", command=self.load_mark)
         self.btn_open_mark.grid(column=1, row=0, padx=2, pady=2)
         
-        # block window
-        self.btn_save = tk.Button(self.window, text='save', command=self.save_image)
-        self.btn_save.grid(column=0, row=0, padx=30, pady=12, sticky='es')
-        # TODO: add checkbox of preview watermark
+        # block canvas
+        self.ckbtn_preview = tk.Checkbutton(
+            self.block_canvas, 
+            text="show watermark preview", 
+            variable=self.show_preview,
+            command=lambda: self.remove_exist_watermark(method="motion") and self.update_canvas_bind(), 
+            bg='white', 
+            # width=8, 
+            # height=1
+            )
+        self.ckbtn_preview.deselect()
+        self.ckbtn_preview.grid(column=0, row=0)
         
-        # block panel
-        self.btn_switch_image = tk.Button(self.block_panel, text="image", command=self.image_mode)
+        self.ckbtn_snap = tk.Checkbutton(
+            self.block_canvas, 
+            text="snap watermark to border", 
+            variable=self.snap,
+            command=lambda: self.remove_exist_watermark(method="motion") and self.update_canvas_bind(), 
+            bg='white', 
+            # width=8, 
+            # height=1
+            )
+        self.ckbtn_snap.select()
+        self.ckbtn_snap.grid(column=0, row=0)
+        
+        self.ckbtn_snap = tk.Checkbutton( # TODO: add show canvas bg
+            self.block_canvas, 
+            text="snap watermark to border", 
+            variable=self.snap,
+            command=lambda: self.remove_exist_watermark(method="motion") and self.update_canvas_bind(), 
+            bg='white', 
+            # width=8, 
+            # height=1
+            )
+        self.ckbtn_snap.select()
+        self.ckbtn_snap.grid(column=0, row=0)
+        
+        # block save
+        self.btn_save = tk.Button(self.block_save, text='save', command=self.save_image)
+        self.btn_save.grid(column=0, row=0, padx=30, pady=12, sticky='es')
+        
+        self.btn_apply = tk.Button(self.block_save, text='apply', command=self.save_image)
+        self.btn_apply.grid(column=1, row=0, padx=30, pady=12, sticky='es')
+        
+        # block switch
+        self.btn_switch_image = tk.Button(self.block_switch, text="image", command=self.image_mode)
         self.btn_switch_image.grid(column=0, row=0, padx=2, pady=2)
         
-        self.btn_switch_text = tk.Button(self.block_panel, text="text", command=self.text_mode)
+        self.btn_switch_text = tk.Button(self.block_switch, text="text", command=self.text_mode)
         self.btn_switch_text.grid(column=1, row=0, padx=2, pady=2)
         
         # block clear
@@ -219,33 +266,33 @@ class WaterMarker():
         # block edit
         row = 0
         self.lbl_text = tk.Label(self.block_edit, text="text", bg='white')
-        self.lbl_text.grid(column=0, row=row, sticky='w')
+        self.lbl_text.grid(column=0, row=row, pady=(0, 2), sticky='w')
         
         self.entry_text = tk.Entry(self.block_edit, textvariable=self.usrntr_text, cursor='xterm', width=32) # TODO: add new line function
         self.entry_text.bind("<Button-1>", self.clear_tkentry_text)        
         self.entry_text.grid(column=1, row=row, sticky='w')
         
-        pixel = tk.PhotoImage(width=1, height=1)
+        # cite: https://stackoverflow.com/questions/66391266/is-it-possible-to-reduce-a-button-size-in-tkinter
+        self.pixel = tk.PhotoImage(width=1, height=1)
         self.btn_clear_entry = tk.Button(
             self.block_edit, 
-            cursor="hand2", # TODO: change every button's cursor to hand2
             text="X", 
-            command=lambda: self.usrntr_text.set(""),  
             bg="white", 
-            image=pixel, # add a transparent image to force tk.Button use pixels
+            border=0, 
+            cursor="hand2", # TODO: change every button's cursor to hand2
+            image=self.pixel, # add a transparent image to force tk.Button use pixels
             width=22, 
             height=22, 
             compound="center", 
-            border=0, 
-            padx=0, 
-            pady=0, 
+            padx=0, pady=0, 
+            command=lambda: self.usrntr_text.set(""),  
             )
         px = self.entry_text.winfo_reqwidth() - self.btn_clear_entry.winfo_reqwidth() - 1
         self.btn_clear_entry.grid(column=1, row=row, padx=(px, 0), sticky='w')
         
         row = 1
         self.lbl_font = tk.Label(self.block_edit, text="font", bg='white')
-        self.lbl_font.grid(column=0, row=row, sticky='w')
+        self.lbl_font.grid(column=0, row=row, pady=(0, 2),sticky='w')
         
         self.selector_font = ttk.Combobox(self.block_edit, values=[default_fname], width=28)
         self.selector_font.current(0)
@@ -255,75 +302,60 @@ class WaterMarker():
         
         row = 2
         self.lbl_fontstyle = tk.Label(self.block_edit, text="style", bg='white')
-        self.lbl_fontstyle.grid(column=0, row=row, sticky='w')
+        self.lbl_fontstyle.grid(column=0, row=row, pady=(0, 2), sticky='w')
         
-        self.selector_fstyle = ttk.Combobox(self.block_edit, values=default_style, width=20)
+        self.selector_fstyle = ttk.Combobox(self.block_edit, values=default_style, width=11)
         self.selector_fstyle.set('Regular')
         self.selector_fstyle.bind("<<ComboboxSelected>>", self.text_mark_maker)
         self.selector_fstyle.grid(column=1, row=row, sticky='w')
         
-        row = 3
         self.lbl_fontsize = tk.Label(self.block_edit, text="size", bg='white')
-        self.lbl_fontsize.grid(column=0, row=row, sticky='w')
+        self.lbl_fontsize.grid(column=1, row=row, padx=(161, 0), sticky='w')
         
         self.spnbx_fontsize = tk.Spinbox(
             self.block_edit, 
             from_=3, to=216, 
             command=self.text_mark_maker, 
             # textvariable=self.usrntr_fontsize, 
-            width=5)
-        self.spnbx_fontsize.grid(column=1, row=row, sticky='w')
+            width=4)
+        self.spnbx_fontsize.grid(column=1, row=row, padx=(210, 0), sticky='w')
         
-        row = 4
-        self.lbl_color = tk.Label(self.block_edit, text="color", bg='white')
-        self.lbl_color.grid(column=0, row=row, sticky='w')
-        
+
         self.btn_color = tk.Button(
-            self.block_edit, text="select a color", 
-            command=lambda: self.choose_color(tg="text"))
-        self.btn_color.grid(column=1, row=row, sticky='w')
-        
-        row = 5
-        self.lbl_opaque = tk.Label(self.block_edit, text="opaque", bg='white')
-        self.lbl_opaque.grid(column=0, row=row, sticky='w')
-        
-        self.scale_opaque = tk.Scale(
             self.block_edit, 
-            from_=0, to=100, 
-            command=self.text_mark_maker, 
-            orient='horizontal', 
-            bg='white', 
-            length=138)
-        self.scale_opaque.set(100)
-        self.scale_opaque.grid(column=1, row=row, sticky='w')
+            text="color", 
+            width=55, height=23, 
+            image=self.pixel, 
+            compound="center", padx=0, pady=0, 
+            command=lambda: self.choose_color(tg="text"), 
+            )
+        self.btn_color.grid(column=1, row=row, padx=(0, 30), pady=(2, 0), sticky='e')
         
-        row = 6
-        self.btn_confirm = tk.Button(self.block_edit, text='advanced settings', command=self.text_mark_maker)
-        self.btn_confirm.grid(column=0, row=row, padx=(32, 0), pady=(8, 0), columnspan=2, sticky='w')
+        row = 3
+        self.btn_adv_sets = tk.Button(self.block_edit, text='advanced settings', width=17, command=self.text_mark_maker)
+        self.btn_adv_sets.grid(column=0, row=row, ipadx=1, pady=(8, 0), columnspan=2, sticky='w')
         # support_func.add_tool_tip(self.btn_confirm, ) # TODO: add show/unshow block_more and relief
         
-        
-        # block more(advanced settings)
-        row = 0
+        # block bg(advanced settings)
         self.ckbtn_mark_bg = tk.Checkbutton(
-            self.block_more, 
-            text="show bg", 
+            self.block_bg, 
+            text="show background", 
             variable=self.show_mark_bg,
             command=self.text_mark_maker, 
             bg='light grey', 
-            width=8, 
-            height=1
             )
         self.ckbtn_mark_bg.deselect()
-        self.ckbtn_mark_bg.grid(column=0, row=row)
+        self.ckbtn_mark_bg.grid(column=0, row=0, padx=(0, 15))
         
         self.btn_bg_color = tk.Button(
-            self.block_more, text="bg color", 
+            self.block_bg, text="background color", 
+            width=17, 
             command=lambda: self.choose_color(tg="bg"))
-        self.btn_bg_color.grid(column=1, row=row, sticky='w')
+        self.btn_bg_color.grid(column=0, row=1, sticky='w')
         
+        # block more(advanced settings)
         row = 1
-        self.lbl_border_w = tk.Label(self.block_more, text="border width", bg='light grey')
+        self.lbl_border_w = tk.Label(self.block_more, text="width offset", bg='light grey')
         self.lbl_border_w.grid(column=0, row=row, padx=(2, 0), sticky='w')
         
         self.spnbx_mark_w = tk.Spinbox(
@@ -335,7 +367,7 @@ class WaterMarker():
         self.spnbx_mark_w.grid(column=1, row=row, sticky='e')
 
         row = 2
-        self.lbl_border_h = tk.Label(self.block_more, text="border height", bg='light grey')
+        self.lbl_border_h = tk.Label(self.block_more, text="height offset", bg='light grey')
         self.lbl_border_h.grid(column=0, row=row, padx=(2, 0), sticky='w')
         
         self.spnbx_mark_h = tk.Spinbox(
@@ -349,6 +381,7 @@ class WaterMarker():
         row = 3
         self.lbl_offset_h = tk.Label(self.block_more, text="offset horizon", bg='light grey')
         self.lbl_offset_h.grid(column=0, row=row, padx=(2, 0), sticky='w')
+        
         self.spnbx_offset_w = tk.Spinbox(
             self.block_more, 
             from_=-200, to=200, 
@@ -360,6 +393,7 @@ class WaterMarker():
         row = 4
         self.lbl_offset_v = tk.Label(self.block_more, text="offset vertical", bg='light grey')
         self.lbl_offset_v.grid(column=0, row=row, padx=(2, 0), sticky='w')
+        
         self.spnbx_offest_h = tk.Spinbox(
             self.block_more, 
             from_=-200, to=200, 
@@ -368,8 +402,50 @@ class WaterMarker():
             width=5)
         self.spnbx_offest_h.grid(column=1, row=row, sticky='e')
         
-        # TODO: add QOL update so that if user forgot to confirm change it'll still update, make it a force update
-        # set canvas and block edit alternating bind with motion to function that calls text calibrate.
+        # block panel # TODO: implement functionalities
+        self.lbl_opaque = tk.Label(self.block_panel, text="opaque", bg='white')
+        self.lbl_opaque.grid(column=0, row=0, padx=0, sticky='w')
+ 
+        self.scale_opaque = tk.Scale(
+            self.block_panel, 
+            from_=0, to=100, 
+            command=self.text_mark_maker, 
+            orient='horizontal', 
+            bg='white', 
+            length=80, width=10,
+            )
+        self.scale_opaque.set(100)
+        self.scale_opaque.grid(column=1, row=0, sticky='w')
+        
+        
+        self.lbl_rotate = tk.Label(self.block_panel, text="rotate", bg='white')
+        self.lbl_rotate.grid(column=2, row=0, padx=5, sticky='w')
+
+        self.spnbx_rotate = tk.Spinbox(
+            self.block_panel, 
+            from_=0, to=359, 
+            # command=self.text_mark_maker, 
+            # textvariable=self.usrntr_offset_h, 
+            width=4)
+        self.spnbx_rotate.grid(column=3, row=0, sticky='w')
+        
+        self.lbl_rotate = tk.Label(self.block_panel, text="scale", bg='white')
+        self.lbl_rotate.grid(column=4, row=0, padx=5, sticky='w')
+ 
+        self.scale_rotate = tk.Scale(
+            self.block_panel, 
+            from_=10, to=1000, 
+            # command=self.text_mark_maker, 
+            orient='horizontal', 
+            bg='white', 
+            length=80, width=10,
+            )
+        self.scale_rotate.set(100)
+        self.scale_rotate.grid(column=5, row=0, sticky='w')
+        
+        # block preview
+        self.lbl_watermark_preview = tk.Label(self.block_mark_preview, bg='white')
+        self.lbl_watermark_preview.grid(column=0, row=0, sticky='w')
     
     # key functions
     def operate(self) -> None:
@@ -455,7 +531,7 @@ class WaterMarker():
         bind canvas with user action,
         calls to update watermark offset.
         """
-        self.filepath_mark = 'assets/img/200x200.png'
+        self.filepath_mark = 'assets/img/watermark.png'
         self.ghost = self.mark = self.proper_load(filepath=self.filepath_mark, type='mark')
         #self.ghost = self.mark = self.proper_load(filepath=filedialog.askopenfilename(), type='mark')
         
@@ -463,16 +539,26 @@ class WaterMarker():
         self.update_mark_offset(type='image')
         self.update_canvas_bind()
         
+        # update to image mode
+        if self.switch_state == "text":
+            self.image_mode()
+        
+        # update preview
+        self.lbl_watermark_preview.config(image=self.mark) # type: ignore
+        
     def update_canvas_bind(self) -> None:
         """
         if both watermark and image exist,
         bind M1 and mouse motion with function:self.canvas_action,
         set focus to canvas.
         """
-        if self.exist_mark and self.exist_image:
-            self.canvas.bind("<Button-1>", lambda event: self.canvas_action(event, method='clicked'))
-            self.canvas.bind("<Motion>", lambda event: self.canvas_action(event, method='motion'))
-            self.canvas.focus_set()
+        if self.show_preview:
+            if self.exist_mark and self.exist_image:
+                self.canvas.bind("<Button-1>", lambda event: self.canvas_action(event, method='clicked'))
+                self.canvas.bind("<Motion>", lambda event: self.canvas_action(event, method='motion'))
+                self.canvas.focus_set()
+        else:
+            self.canvas.unbind("<Motion>")
         
     def update_mark_size(self):
         width = np.round(self.mark_pil.width / self.image_width_scale)
@@ -563,9 +649,12 @@ class WaterMarker():
         self.update_mark_offset(type='text', bbox=bbox)
         self.canvas.delete(temp)
         
+        # update to text mode
+        if self.switch_state == 'mark':
+            self.text_mode()
+        
         # update preview
-        self.lbl_watermark_text_preview = tk.Label(self.block_text_preview, image=self.mark, bg='white') # type: ignore
-        self.lbl_watermark_text_preview.grid(column=1, row=5, sticky='w')
+        self.lbl_watermark_preview.config(image=self.mark) # type: ignore
     
     def save_image(self) -> None:
         """
@@ -573,16 +662,23 @@ class WaterMarker():
         snap to border if watermark will be outside of image,
         image will be saved at root folder in project.
         """
+        if self.show_mark_bg.get():
+            save = messagebox.askyesno(
+                title="Hold up.", 
+                message="the background of watermark preview will also appear in the result image, still want to save the image?", 
+                )
+            if not save:
+                return
         x_offset = self.mark_pil.width
         y_offset = self.mark_pil.height
         
-        if self.snap:
-            x = np.round(self.snap[0] * self.image_width_scale)
-            y = np.round(self.snap[1] * self.image_height_scale)
+        if self.snap and self.snap_position:
+            x = np.round(self.snap_position[0] * self.image_width_scale)
+            y = np.round(self.snap_position[1] * self.image_height_scale)
 
-            if self.snap[0] == self.image.width():
+            if self.snap_position[0] == self.image.width():
                 x -= x_offset
-            if self.snap[1] == self.image.height():
+            if self.snap_position[1] == self.image.height():
                 y -= y_offset
         else:
             true_x = self.true_position[0] - self.mark_offset_x_min - self.image_datum_x
@@ -591,25 +687,31 @@ class WaterMarker():
             x = np.round(true_x * self.image_width_scale)
             y = np.round(true_y * self.image_height_scale)
         offset = (round(x), round(y))
-
+        
         mark = self.mark_pil.copy()
+        width = np.round(self.mark.width() * self.image_width_scale)
+        height = np.round(self.mark.height() * self.image_height_scale)
+        size = (round(width), round(height))
+        resized_mark = mark.resize(size)
         
         result_image = self.image_pil.copy()
-        result_image.alpha_composite(mark, offset)
-        result_image.save("result.png", quality=100)
+        result_image.alpha_composite(resized_mark, offset)
+        result_image.save("result.png")
         
-    # functions bind with command/action # TODO: [last]sort this
+    # functions bind with command/action # TODO: [last] sort this
     def image_mode(self) -> None:
         self.switch_state = 'mark'
         if self.filepath_mark is None:
             self.btn_switch_text.config(relief='sunken')
             messagebox.showwarning(title="Missing something", message="open a image file for watermark first!")
         else:
+            self.load_mark()
             self.update_switch_button()
         
     def text_mode(self) -> None:
         self.switch_state = 'text'
         self.update_switch_button()
+        self.text_mark_maker()
         
     def update_switch_button(self) -> None:
         """
@@ -667,8 +769,8 @@ class WaterMarker():
         x0, y0 = event.x, event.y
         x, y, snap_position = self.mouse_loc_calibrate(x0, y0) 
         
-        if method == 'clicked':
-            self.snap:tuple[int,int]|None = snap_position
+        if method == 'clicked' and self.snap:
+            self.snap_position:tuple[int,int]|None = snap_position
             self.true_position:tuple[int, int] = x0, y0
         self.draw_watermark(x, y, method=method)
         
@@ -700,7 +802,7 @@ class WaterMarker():
         if tg == "text":
             if color_code[1] is not None:
                 self.current_font_rgb, self.current_font_hexcolor = color_code
-                self.lbl_watermark_text_preview.config(fg=self.current_font_hexcolor)
+                self.lbl_watermark_preview.config(fg=self.current_font_hexcolor)
             else:
                 self.current_font_hexcolor = 'black'
         elif tg == 'bg':
@@ -721,10 +823,13 @@ class WaterMarker():
         Args:
             method (str): user action, 'clicked' or 'motion'.
         """
-        if method == 'clicked':
-            self.canvas.delete(self.canvas_mark)
-        elif method == 'motion':
-            self.canvas.delete(self.canvas_mark_preview)
+        try:
+            if method == 'clicked':
+                self.canvas.delete(self.canvas_mark)
+            elif method == 'motion':
+                self.canvas.delete(self.canvas_mark_preview)
+        except AttributeError:
+            print("making sure to remove unwanted watermarks")
     
     def draw_watermark(self, x:int, y:int, method:str) -> None:
         """
@@ -759,9 +864,8 @@ class WaterMarker():
         y_min = self.image_datum_y + self.mark_offset_y_min
         x_max = self.image_datum_x + self.image.width() - self.mark_offset_x_max
         y_max = self.image_datum_y + self.image.height() - self.mark_offset_y_max
-
         snap_position = None
-        if x_max >= x >= x_min and y_max >= y >= y_min: # in image
+        if x_max >= x >= x_min and y_max >= y >= y_min or not self.snap.get(): # in image
             mouse_loc = x, y
         elif x <= x_min and y <= y_min: # top left corner
             mouse_loc = x_min, y_min
