@@ -1,4 +1,5 @@
 import tkinter as tk
+import tkinter.ttk as ttk
 
 from matplotlib import font_manager
 from PIL import ImageFont
@@ -99,3 +100,26 @@ def get_sysfont_sorted() -> dict[str, dict[str, str]]:
             fonts_dict[font_name] = {}
         fonts_dict[font_name][style] = file_name
     return dict(fonts_dict.items())
+
+class FormattedSpinbox(ttk.Spinbox):
+    """
+    A ttk.Spinbox that displays a number followed by a specify symbol.
+    
+    cite: https://stackoverflow.com/questions/56613120/python-3-ttk-spinbox-format-option
+    """
+    def __init__(self, master, symbol:str, **kwargs):
+        kwargs['command'] = self.command
+        super().__init__(master, **kwargs)
+        self.symbol = symbol
+        
+    def set(self, value):
+        super().set(value)
+        self.command()
+        
+    def get(self):
+        return int(super().get().strip().split()[0])
+    
+    def command(self):
+        value = self.get()
+        self.delete(0, tk.END)
+        self.insert(0, f"{value} {self.symbol}")
