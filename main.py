@@ -30,7 +30,7 @@ default_font = 'Arial'
 style = ['Regular', 'Narrow Bold Italic', 'Bold', 'Narrow Bold', 'Narrow Italic', 'Narrow', 'Bold Italic', 'Black', 'Italic'] 
 default_style = sorted(style)
 
-_state: TypeAlias = Literal["mark", "text"]
+_state: TypeAlias = Literal["image", "text"]
 _color: TypeAlias = Literal["mark bg", "text", "canvas"]
 _img: TypeAlias = Literal["image", "mark", "text"]
 
@@ -423,6 +423,7 @@ class WaterMarker():
     
     def adv_sets(self) -> None:
         # FIXME: when clickes button multiple time will generate multiple new window
+        # FIXME: setting(s) will stay at default when reopened.
         self.window_tplvl = tk.Toplevel()
         self.window_tplvl.config(bg="light grey")
         
@@ -610,8 +611,22 @@ class WaterMarker():
         bind canvas with user action,
         calls to update watermark offset.
         """
-        self.ghost = self.mark = self.proper_load(filepath=self.filepath_mark, type='mark') # type: ignore
-        
+        angle = self.usrntr_rotate.get()
+        if angle == 0:
+            self.ghost = self.mark = self.proper_load(filepath=self.filepath_mark, type='mark') # type: ignore
+        else:
+            img = Image.open(self.filepath_mark) # type: ignore
+            img_rotate = img.rotate(angle=angle, expand=1)
+
+            width = img.width
+            height = img.height
+            
+            w, h = self.get_rotated_size(width, height, angle)
+            base = Image.new("RGBA", (w, h))
+            base.paste(img_rotate)
+            base.save(watermark_fp)
+            
+            self.ghost = self.mark = self.proper_load(filepath=watermark_fp, type='mark') # type: ignore
         self.update_mark_offset(type='image')
         self.update_canvas_bind()
         
@@ -708,7 +723,7 @@ class WaterMarker():
                     print(name, font_dict[name])
         
     def update_userequest(self) -> None:
-        if self.switch_state == "mark":
+        if self.switch_state == "image":
             self.load_mark()
         elif self.switch_state == "text":
             self.text_mark_maker()
@@ -736,46 +751,38 @@ class WaterMarker():
         f = ImageDraw.Draw(_)
         f_bbox = f.textbbox((0, 0), self.usrntr_text.get(), font=fnt)
         
-        
+        # get text border sizes of the text with font
         width = f_bbox[2] - f_bbox[0] + self.usrntr_border_w.get()
         height = f_bbox[3] - f_bbox[1] + self.usrntr_border_h.get()
-        print("sourse size", width, height)
-        # if rotation is requested
+        
+        # get sizes of the text border when rotated
         angle = self.usrntr_rotate.get()
-        if angle != 0:
-            size = width, height
-            adj = width / 2
-            opp = height / 2
-            hyp = math.sqrt(adj**2 + opp**2)
-            
-            height, width = self.get_rotated_size(adj_l=adj, adj_r=hyp, opp=opp, angle=angle)
+        w, h = self.get_rotated_size(width, height, angle)
 
         # create the watermark from text
-        with Image.new("RGBA", (width, height)).convert("RGBA") as base:
-            if angle == 0:
-                size = base.size
-            
+        with Image.new("RGBA", (w, h)) as base: # use rotated size as base image
+            # use original text border as container of text
             if self.show_mark_bg.get():
-                txt = Image.new("RGBA", size, (*self.mark_bg, 255))
+                txt = Image.new("RGBA", (width, height), (*self.mark_bg, 255))
             else:
-                txt = Image.new("RGBA", size, (255, 255, 255, 0))
-            d = ImageDraw.Draw(txt)
+                txt = Image.new("RGBA", (width, height), (255, 255, 255, 0))
+            d = ImageDraw.Draw(txt) # plain color image
             
+            # user entered numbers
             offset = (self.usrntr_offset_w.get(), self.usrntr_offset_h.get())
             alpha:int = round(np.round(255 * (self.scale_opaque.get() / 100)))
             text_color = *self.current_font_rgb, alpha
             
-             # TODO: see if offset with rotate is needed
+            # draw text at offset in plain color image
             d.text(offset, self.usrntr_text.get(), font=fnt, fill=text_color)
             
-            if angle != 0:
-                w=txt.rotate(angle,  expand=1)
-                base.paste(w)
-                base.save(watermark_fp)
-            else:
-                out = Image.alpha_composite(base, txt)
-                out.save(watermark_fp)
-        
+            # rotate plain color image
+            w = txt.rotate(angle,  expand=1)
+            
+            # paste plain color image onto base image
+            base.paste(w)
+            base.save(watermark_fp)
+
         # update watermarks
         self.ghost = self.mark = self.proper_load(filepath=watermark_fp, type="text")
         
@@ -787,7 +794,7 @@ class WaterMarker():
         self.canvas.delete(temp)
         
         # update to text mode
-        if self.switch_state == 'mark':
+        if self.switch_state == 'image':
             self.text_mode()
         
         self.is_mark = True
@@ -795,17 +802,31 @@ class WaterMarker():
         # update preview
         self.lbl_watermark_preview.config(image=self.mark) # type: ignore
     
-    def get_rotated_size(self, adj_l, adj_r, opp, angle):
-        hyp = math.sqrt(adj_l**2 + opp**2)
-        equa = (adj_l**2 + adj_r**2 - opp**2) / (2*adj_l*adj_r)
-        deg_p = 90 - angle
+    def get_rotated_size(self, width, height, angle):
+        adj = width / 2
+        opp = height / 2
+        hyp = math.sqrt(adj**2 + opp**2)
+        
+        if angle in [0, 180, 360]:
+            return width, height
+        elif angle in [90, 270]:
+            return height, width
+        
+        angle = angle % 180
+        if angle > 90:
+            angle = 90 - (angle - 90)
+        
+        hyp = math.sqrt(adj**2 + opp**2)
+        equa = (adj**2 + hyp**2 - opp**2) / (2*adj*hyp)
         
         deg_a = math.degrees(math.acos(equa))
-        deg_b = (angle % 90) - deg_a
-        deg_c = 90 - (deg_p - deg_a)
-
+        deg_b = np.absolute(angle - deg_a)
+        
+        deg_c = (90 - angle) - deg_a
+        deg_d = 90- deg_c
+        
         width = round(math.ceil(math.cos(deg_b * (math.pi / 180)) * hyp * 2))
-        height = round(math.ceil(math.sin(deg_c * (math.pi / 180)) * hyp * 2))
+        height = round(math.ceil(math.sin(deg_d * (math.pi / 180)) * hyp * 2))
         return width, height
     
     def save_image(self) -> None:
@@ -852,7 +873,7 @@ class WaterMarker():
         
     # functions bind with command/action # TODO: [last] sort this
     def image_mode(self) -> None:
-        self.switch_state = 'mark'
+        self.switch_state = 'image'
         if self.filepath_mark is None:
             self.btn_switch_text.config(relief='sunken')
             messagebox.showwarning(title="Missing something", message="open a image file for watermark first!")
@@ -870,7 +891,7 @@ class WaterMarker():
         switch watermark to image or text, not-the-current one,
         remove previous created watermark and preview.
         """
-        if self.switch_state == 'mark':
+        if self.switch_state == 'image':
             self.btn_switch_image.config(relief='sunken')
             self.btn_switch_text.config(relief='raised')
         elif self.switch_state == 'text':
