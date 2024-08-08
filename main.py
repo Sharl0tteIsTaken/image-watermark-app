@@ -33,7 +33,7 @@ default_style = sorted(style)
 _state: TypeAlias = Literal["image", "text"]
 _color: TypeAlias = Literal["mark bg", "text", "canvas"]
 _img: TypeAlias = Literal["image", "mark", "text"]
-
+_loc: TypeAlias = Literal["image", "canvas"]
 
 grey = (128, 128, 128)
 
@@ -44,8 +44,10 @@ default_offset_w = 3
 default_offset_h = -3
 
 # TODO: make sure all docstring is updated, and if event have type
+# TODO: add tooltip to everywhere nessary
 
-watermark_fp = "watermark_text.png" # TODO: [later] get this a location to stay
+watermark_fp = "custom_watermark.png" # TODO: [later] get these a location to stay
+grid_fp = "watermark_grid.png"
 
 class WaterMarker():
     """
@@ -101,7 +103,10 @@ class WaterMarker():
         
         self.fonts_dict:dict[str, dict[str, str]] = support_func.get_sysfont_sorted()
         self.font_names:list[str] = sorted(list(self.fonts_dict.keys()))
-                
+        
+        self.grid_watermark:list[int] = []
+        self.grid_watermark_preview:list[int] = []
+        
     def setup_variable(self) -> None:
         """
         create every variable for widgets.
@@ -132,11 +137,19 @@ class WaterMarker():
         self.usrntr_scale = tk.IntVar()
         self.usrntr_scale.set(100)
         
+        self.usrntr_opaque = tk.IntVar()
+        self.usrntr_opaque.set(100)
+        
+        self.usrntr_grid = tk.IntVar()
+        self.usrntr_grid.set(100)
+        
         # checkbutton variables, set value after checkbutton is created
         self.show_mark_bg = tk.BooleanVar()
         self.show_preview = tk.BooleanVar()
         self.snap = tk.BooleanVar()
         self.show_cnvs_bg = tk.BooleanVar()
+        self.grid = tk.BooleanVar()
+        
         
         
 
@@ -185,8 +198,7 @@ class WaterMarker():
     def load_default_image(self):
         # TODO: [later] move to load_asset() load asset for UI
         self.load_image()
-        self.default_image_example = self.proper_load(filepath='assets/img/advanced_settings_example.png', type='image', max_size=(400, 200))
-        print(self.default_image_example.width(), self.default_image_example.height())
+        self.default_image_example = self.proper_load(filepath='assets/img/advanced_settings_example.png', type_='image', max_size=(400, 200))
 
     def setup_widget(self) -> None:
         """
@@ -301,7 +313,7 @@ class WaterMarker():
             text="X", 
             bg="white", 
             border=0, 
-            cursor="hand2", # TODO: change every button's cursor to hand2
+            cursor="hand2", # TODO: change every button and checkbutton's cursor to hand2
             image=self.pixel, # add a transparent image to force tk.Button use pixels
             width=22, 
             height=22, 
@@ -382,7 +394,7 @@ class WaterMarker():
             width=8, 
             # symbol="%"
             )
-        self.spnbx_scale.bind("<KeyRelease>", self.text_mark_maker)
+        self.spnbx_scale.bind("<KeyRelease>", self.update_userequest) # type: ignore
         self.spnbx_scale.grid(column=3, row=row, padx=4, sticky='e')
         
         row = 1
@@ -393,23 +405,31 @@ class WaterMarker():
             self.block_panel, 
             from_=0, to=100, 
             orient='horizontal', 
-            command=self.text_mark_maker, 
+            variable=self.usrntr_opaque, 
+            command=self.update_userequest,  # type: ignore
             length=120, width=10, bg='white', 
             )
-        self.scale_opaque.set(100)
         self.scale_opaque.grid(column=1, row=row, sticky='w')
         
-        self.lbl_grid = tk.Label(self.block_panel, text="grid", bg='white')
-        self.lbl_grid.grid(column=2, row=row, padx=0, sticky='e')
+        # self.lbl_grid = tk.Label(self.block_panel, text="grid", bg='white')
+        # self.lbl_grid.grid(column=2, row=row, padx=0, sticky='e')
+        
+        self.ckbtn_grid = tk.Checkbutton(
+            self.block_panel, 
+            text="grid", 
+            variable=self.grid, 
+            command=self.update_userequest,  # type: ignore
+            bg='white')
+        self.ckbtn_grid.grid(column=2, row=row, padx=0, sticky='e')
  
         self.scale_grid = tk.Scale(
             self.block_panel, 
-            from_=0, to=100, 
+            from_=0, to=1000, 
             orient='horizontal', 
-            # command=self.text_mark_maker, 
+            variable=self.usrntr_grid, 
+            command=self.update_userequest, 
             length=120, width=10, bg='white', 
             )
-        self.scale_grid.set(0)
         self.scale_grid.grid(column=3, row=row, sticky='e')
         
         # block preview
@@ -513,8 +533,9 @@ class WaterMarker():
         self, 
         *, 
         filepath:str, 
-        type:_img, 
+        type_:_img, 
         max_size:tuple[int,int]|None=None, 
+        alpha:int|None=None, 
         ) -> ImageTk.PhotoImage:
         """
         load image from filepath to Image to PhotoImage, 
@@ -534,24 +555,25 @@ class WaterMarker():
         """
         image_pil = Image.open(filepath)
         
-        self.watermark_type = type
-        if type == 'image':
+        self.watermark_type = type_
+        if type_ == 'image':
             self.image_pil = image_pil
-        elif type == 'mark':
+        elif type_ == 'mark':
             self.mark_pil = image_pil
-        elif type == "text":
+        elif type_ == "text":
             self.mark_pil = image_pil
             width = np.round(image_pil.width / self.image_width_scale)
             height = np.round(image_pil.height / self.image_height_scale)
             size = (round(width), round(height))
-        if type == "text":
+        if type_ == "text":
             image_resize = image_pil.resize(size)
         else:
             image_resize = image_pil.resize(
-                self.image_size_calculate(image_pil.width, image_pil.height, type=type, max_size=max_size)
+                self.image_size_calculate(image_pil.width, image_pil.height, type_=type_, max_size=max_size)
                 )
         img = image_resize.copy()
-        # if user change the scale of watermark
+        
+        # if user set the scale of watermark
         rq_scale = self.usrntr_scale.get() / 100
         if rq_scale != float(1):
             rq_width = np.round(image_resize.width * rq_scale)
@@ -559,13 +581,12 @@ class WaterMarker():
             rq_size = (round(rq_width), round(rq_height))
             image_rqsize = image_resize.resize(rq_size)
             img = image_rqsize.copy()
-            
         
-        # if user change the rotation of watermark # TODO: remove this
-        # rq_angle = self.usrntr_rotate.get()
-        # if rq_angle != 0 or rq_angle != 360:
-        #     image_rqangle = img.rotate(rq_angle)
-        #     img = image_rqangle.copy()
+        # if user set the opaqueness of watermark
+        if alpha is not None:
+            img.putalpha(alpha)
+            if alpha == 0:
+                img = Image.new("RGBA", (10, 10))
         
         return ImageTk.PhotoImage(img)
     
@@ -583,13 +604,13 @@ class WaterMarker():
         if self.is_image:
             self.canvas.delete(self.canvas_image)
         
-        self.image = self.proper_load(filepath=self.filepath_image, type='image')
+        self.image = self.proper_load(filepath=self.filepath_image, type_='image')
         self.image_width_scale = self.image_pil.width / self.image.width()
         self.image_height_scale = self.image_pil.height / self.image.height()
         
         # calculate where datum's(top left corner of image) position will be in the canvas.
-        self.image_datum_x = math.floor((canvas_width - self.image.width()) / 2)
-        self.image_datum_y = math.floor((canvas_height - self.image.height()) / 2)
+        self.image_datum_x = math.floor((self.canvas.winfo_reqwidth() - self.image.width()) / 2)
+        self.image_datum_y = math.floor((self.canvas.winfo_reqheight() - self.image.height()) / 2)
         
         # create image in canvas position at datum.
         self.canvas_image = self.canvas.create_image(self.image_datum_x, self.image_datum_y, image=self.image, anchor='nw')
@@ -611,9 +632,13 @@ class WaterMarker():
         bind canvas with user action,
         calls to update watermark offset.
         """
+        opaque = self.usrntr_opaque.get()
+        alpha = round(np.round((opaque/100) * 255))
+        
         angle = self.usrntr_rotate.get()
         if angle == 0:
-            self.ghost = self.mark = self.proper_load(filepath=self.filepath_mark, type='mark') # type: ignore
+            
+            self.ghost = self.mark = self.proper_load(filepath=self.filepath_mark, type_='mark', alpha=alpha) # type: ignore
         else:
             img = Image.open(self.filepath_mark) # type: ignore
             img_rotate = img.rotate(angle=angle, expand=1)
@@ -626,7 +651,7 @@ class WaterMarker():
             base.paste(img_rotate)
             base.save(watermark_fp)
             
-            self.ghost = self.mark = self.proper_load(filepath=watermark_fp, type='mark') # type: ignore
+            self.ghost = self.mark = self.proper_load(filepath=watermark_fp, type_='mark', alpha=alpha) # type: ignore
         self.update_mark_offset(type='image')
         self.update_canvas_bind()
         
@@ -722,11 +747,13 @@ class WaterMarker():
                 if "Regular" not in all_style and "regular" not in all_style:
                     print(name, font_dict[name])
         
-    def update_userequest(self) -> None:
+    def update_userequest(self, event=None) -> None:
+        print(self.switch_state)
         if self.switch_state == "image":
             self.load_mark()
         elif self.switch_state == "text":
             self.text_mark_maker()
+        self.remove_exist_watermark(method="motion")
         
     def text_mark_maker(self, event=None) -> None:
         """
@@ -770,7 +797,7 @@ class WaterMarker():
             
             # user entered numbers
             offset = (self.usrntr_offset_w.get(), self.usrntr_offset_h.get())
-            alpha:int = round(np.round(255 * (self.scale_opaque.get() / 100)))
+            alpha:int = round(np.round(255 * (self.usrntr_opaque.get() / 100)))
             text_color = *self.current_font_rgb, alpha
             
             # draw text at offset in plain color image
@@ -783,11 +810,16 @@ class WaterMarker():
             base.paste(w)
             base.save(watermark_fp)
 
-        # update watermarks
-        self.ghost = self.mark = self.proper_load(filepath=watermark_fp, type="text")
+        # grid_space = self.usrntr_grid.get()
+        # if grid_space == 100:
+            # update watermarks
+        self.ghost = self.mark = self.proper_load(filepath=watermark_fp, type_="text")
+        # else:
+            # self.grid_mark_maker(grid_space=grid_space)
+            # self.ghost = self.mark = self.proper_load(filepath="watermark_grid.png", type_="text")
         
         # update wartermark offset
-        x, y = round(self.canvas.winfo_width() / 2), round(self.canvas.winfo_height() / 2)
+        x, y = round(self.canvas.winfo_reqwidth() / 2), round(self.canvas.winfo_reqheight() / 2)
         temp = self.canvas.create_image(x, y, image=self.mark, anchor='center')
         bbox = self.canvas.bbox(temp)
         self.update_mark_offset(type='text', bbox=bbox)
@@ -802,6 +834,51 @@ class WaterMarker():
         # update preview
         self.lbl_watermark_preview.config(image=self.mark) # type: ignore
     
+    def grid_mark_maker(self, x:int, y:int, grid_space:int, mark:Image.Image) -> Image.Image:
+        
+        width = self.image_pil.width
+        height = self.image_pil.height
+        
+        with Image.new("RGBA", (width, height)) as base:
+            locs = self.grid_calculate(x, y, grid_space, on="image")
+            base.paste(im=(255, 0, 0, 255), box=(x-2,y-2, x+2, y+2))
+            print("locs", locs)
+            for x in locs['x']:
+                for y in locs['y']:
+                    base.paste(im=self.mark_pil, box=(x,y))
+            return base.copy()
+    
+    def grid_calculate(self, x:int, y:int, grid_space:int, on:_loc) -> dict[str, list[int]]:
+        if on == "canvas":
+            width = self.image.width() + self.mark.width()
+            height = self.image.height() + self.mark.height()
+            step = max(self.mark.width(), self.mark.height()) + grid_space
+            x_max = self.canvas.winfo_reqwidth()
+            y_max = self.canvas.winfo_reqheight()
+        elif on == "image":
+            width = self.image_pil.width + self.mark_pil.width
+            height = self.image_pil.height + self.mark_pil.height
+            scale = min(self.image_width_scale, self.image_height_scale)
+            step = max(self.mark_pil.width, self.mark_pil.height) + round(grid_space * scale)
+            x_max = width + step
+            y_max = height + step
+            
+        if x != 0:
+            x_min = x - (x // step + 1) * step
+        else:
+            x_min = 0
+        if y != 0:
+            y_min = y - (y // step + 1) * step
+        else:
+            y_min = 0
+        x_locs = [x_loc for x_loc in range(x_min, x_max, step)]
+        y_locs = [y_loc for y_loc in range(y_min, y_max, step)]
+        
+        return {
+            "x": x_locs, 
+            "y": y_locs, 
+        }
+        
     def get_rotated_size(self, width, height, angle):
         adj = width / 2
         opp = height / 2
@@ -842,16 +919,15 @@ class WaterMarker():
                 )
             if not save:
                 return
+        
         x_offset = self.mark_pil.width
         y_offset = self.mark_pil.height
         
         if self.snap and self.snap_position:
-            x = np.round(self.snap_position[0] * self.image_width_scale)
-            y = np.round(self.snap_position[1] * self.image_height_scale)
-
-            if self.snap_position[0] == self.image.width():
+            x, y = self.snap_position
+            if self.snap_position[0] == self.image_pil.width:
                 x -= x_offset
-            if self.snap_position[1] == self.image.height():
+            if self.snap_position[1] == self.image_pil.height:
                 y -= y_offset
         else:
             true_x = self.true_position[0] - self.mark_offset_x_min - self.image_datum_x
@@ -867,8 +943,16 @@ class WaterMarker():
         size = (round(width), round(height))
         resized_mark = mark.resize(size)
         
+        if self.grid.get():
+            grid_space = self.usrntr_grid.get()
+            mark = self.grid_mark_maker(round(x), round(y), grid_space, resized_mark)
+            result_mark = mark.copy()
+            offset = 0, 0
+        else:
+            result_mark = resized_mark.copy()
+            
         result_image = self.image_pil.copy()
-        result_image.alpha_composite(resized_mark, offset)
+        result_image.alpha_composite(result_mark, offset)
         result_image.save("result.png")
         
     # functions bind with command/action # TODO: [last] sort this
@@ -935,11 +1019,19 @@ class WaterMarker():
         if method == 'clicked' and self.snap:
             self.snap_position:tuple[int,int]|None = snap_position
             self.true_position:tuple[int, int] = x0, y0
-        self.draw_watermark(x, y, method=method)
+            
+        if self.grid.get():
+            grid_space = self.usrntr_grid.get()
+            locs = self.grid_calculate(x, y, grid_space, on="canvas")
+            for x_loc in locs["x"]:
+                for y_loc in locs["y"]:
+                    self.draw_watermark(x_loc, y_loc, method=method, grid=True)
+        else:
+            self.draw_watermark(x, y, method=method)
         
     
     # support functions
-    def image_size_calculate(self, width:int, height:int, *, type:_img, max_size:tuple[int,int]|None=None) -> tuple[int, int]:
+    def image_size_calculate(self, width:int, height:int, *, type_:_img, max_size:tuple[int,int]|None=None) -> tuple[int, int]:
         """
         calculate size of image to have a set blank border in canvas, which will use later to resize image. 
 
@@ -955,17 +1047,16 @@ class WaterMarker():
             wid, hei = max_size
             w = wid / width
             h = hei / height
-            ratio:float =  min(w, h) 
-        elif type == 'image':
-            w = (canvas_width - canvas_padx * 2) / width
-            h = (canvas_height - canvas_pady * 2) / height
-        elif type == 'mark':
-            w = mark_width/width
-            h = mark_height/height
-        elif type == 'text':
+        elif type_ == 'image':
+            w = (self.canvas.winfo_reqwidth() - canvas_padx * 2) / width
+            h = (self.canvas.winfo_reqheight() - canvas_pady * 2) / height
+        elif type_ == 'mark':
+            w = mark_width / width
+            h = mark_height / height
+        elif type_ == 'text':
             w = self.image_width_scale
             h = self.image_height_scale
-        ratio:float =  min(w, h) 
+        ratio:float = min(w, h) 
         size:tuple[int, int] = math.floor(width * ratio), math.floor(height * ratio)
         return size
     
@@ -1005,8 +1096,15 @@ class WaterMarker():
                 self.canvas.delete(self.canvas_mark_preview)
         except AttributeError:
             print("making sure to remove unwanted watermarks")
+        
+        if self.grid.get() and method == 'clicked':
+            for item in self.grid_watermark:
+                self.canvas.delete(item)
+        elif self.grid.get() and method == 'motion':
+            for item in self.grid_watermark_preview:
+                self.canvas.delete(item)
     
-    def draw_watermark(self, x:int, y:int, method:str) -> None:
+    def draw_watermark(self, x:int, y:int, method:str, grid:bool=False) -> None:
         """
         draw watermark on (x, y) in canvas, watermark type is determined by args:method.
 
@@ -1017,8 +1115,13 @@ class WaterMarker():
         """
         if method == 'clicked':
             self.canvas_mark = self.canvas.create_image(x, y, image=self.mark, anchor='nw')
+            if grid:
+                self.grid_watermark.append(self.canvas_mark)
         elif method == 'motion':
             self.canvas_mark_preview = self.canvas.create_image(x, y, image=self.ghost, anchor='nw')
+            if grid:
+                self.grid_watermark_preview.append(self.canvas_mark_preview)
+
        
     def mouse_loc_calibrate(self, x:int, y:int) -> tuple[int, int, tuple[int,int]|None]:
         """
@@ -1040,6 +1143,7 @@ class WaterMarker():
         x_max = self.image_datum_x + self.image.width() - self.mark_offset_x_max
         y_max = self.image_datum_y + self.image.height() - self.mark_offset_y_max
         snap_position = None
+        print(x, y)
         if x_max >= x >= x_min and y_max >= y >= y_min or not self.snap.get(): # in image
             mouse_loc = x, y
         elif x <= x_min and y <= y_min: # top left corner
@@ -1047,32 +1151,38 @@ class WaterMarker():
             snap_position = (0, 0)
         elif x >= x_max and y <= y_min: # top right corner
             mouse_loc = x_max, y_min
-            snap_position = (self.image.width(), 0)
+            snap_position = (self.image_pil.width, 0)
         elif x <= x_min and y >= y_max: # btm left corner
             mouse_loc = x_min, y_max
-            snap_position = (0, self.image.height())
+            snap_position = (0, self.image_pil.height)
         elif x >= x_max and y >= y_max: # btm right corner
             mouse_loc = x_max, y_max
-            snap_position = (self.image.width(), self.image.height())
+            snap_position = (self.image_pil.width, self.image_pil.height)
         elif x_max >= x >= x_min and y <= y_min: # top border
             mouse_loc = x, y_min
-            snap_position = (x, 0)
+            x_loc = np.round((x - self.mark_offset_x_min - self.image_datum_x) * self.image_width_scale)
+            snap_position = round(x_loc), 0
         elif x_max >= x >= x_min and y >= y_max: # btm border
             mouse_loc = x, y_max
-            snap_position = (x, self.image.height())
+            x_loc = np.round((x - self.mark_offset_x_min - self.image_datum_x) * self.image_width_scale)
+            snap_position = round(x_loc), self.image_pil.height
         elif x <= x_min and y_max >= y >= y_min: # left border
             mouse_loc = x_min, y
-            snap_position = (0, y)
+            y_loc = np.round((y - self.mark_offset_y_min - self.image_datum_y) * self.image_height_scale)
+            snap_position = 0, round(y_loc)
         elif x >= x_max and y_max >= y >= y_min: # right border
             mouse_loc = x_max, y
-            snap_position = (self.image.width(), y)
+            y_loc = np.round((y - self.mark_offset_y_min - self.image_datum_y) * self.image_height_scale)
+            snap_position = self.image_pil.width, round(y_loc)
         else:
-            raise ValueError(f"mind blown, clicked at (x:{x}, y:{y}), not in elif tree?\n\
+            raise ValueError(f"\
+                mind blown, clicked at (x:{x}, y:{y}), not in elif tree?\n\
                 image size: ({self.image.width()}x{self.image.height()})\n\
                 datum at (x:{self.image_datum_x}, y:{self.image_datum_y})\n\
                 x min max: {x_min}, {x_max}\n\
                 y min max: {y_min}, {y_max}\n\
                 never thought this will occur, add any missed info to mouse_loc_calibrate().")
+        print(snap_position)
         x_calibrate = mouse_loc[0] - self.mark_offset_x_min
         y_calibrate = mouse_loc[1] - self.mark_offset_y_min
         return x_calibrate, y_calibrate, snap_position
