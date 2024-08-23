@@ -2,7 +2,7 @@ import tkinter as tk
 import numpy as np
 import math
 
-import support_func
+import support_func as sf
 
 from PIL import Image, ImageDraw, ImageFont, ImageTk, ImageFilter
 from string import ascii_letters
@@ -34,6 +34,9 @@ _state: TypeAlias = Literal["image", "text"]
 _color: TypeAlias = Literal["mark bg", "text", "canvas"]
 _img: TypeAlias = Literal["image", "mark", "text", "icon"]
 _loc: TypeAlias = Literal["image", "canvas"]
+_rstable: TypeAlias = Literal["rotate", "scale", "opaque", "grid", "adv_sets"]
+_dft_key: TypeAlias = Literal["attr_name", "default_val"]
+
 
 grey = (128, 128, 128)
 
@@ -73,10 +76,14 @@ class WaterMarker():
         self.setup_variable()
         self.setup_labelframe()
         self.setup_widget()
+        self.setup_rstble()
         
-        self.update_switch_button()
-        self.load_default_image()
-        self.text_mark_maker()
+        
+        self.load_defaults()
+        
+        
+        self.window.wait_visibility()
+        self.awake_custom()
         
         self.window.option_add("*Dialog.msg.font", "Arial -16")
         
@@ -101,7 +108,7 @@ class WaterMarker():
         self.current_font_hexcolor = "black"
         self.current_font_rgb:tuple[int,int,int] = (0, 0, 0)
         
-        self.fonts_dict:dict[str, dict[str, str]] = support_func.get_sysfont_sorted()
+        self.fonts_dict:dict[str, dict[str, str]] = sf.get_sysfont_sorted()
         self.font_names:list[str] = sorted(list(self.fonts_dict.keys()))
         
         self.grid_watermark:list[int] = []
@@ -116,11 +123,20 @@ class WaterMarker():
         - user_enter_text
         """
         # usrntr = user enter
-        self.usrntr_text = tk.StringVar() # TODO: order this
-        self.usrntr_text.set("enter text as watermark")
-        
         self.usrntr_fontsize = tk.IntVar()
         self.usrntr_fontsize.set(default_font_fmt[1])
+        
+        self.usrntr_rotate = tk.IntVar()
+        self.usrntr_rotate.set(0)
+        
+        self.usrntr_scale = tk.DoubleVar()
+        self.usrntr_scale.set(1)
+        
+        self.usrntr_opaque = tk.IntVar()
+        self.usrntr_opaque.set(100)
+        
+        self.usrntr_grid = tk.IntVar()
+        self.usrntr_grid.set(100)
         
         self.usrntr_border_w = tk.IntVar()
         self.usrntr_border_w.set(default_border_w)
@@ -132,24 +148,13 @@ class WaterMarker():
         self.usrntr_offset_h = tk.IntVar()
         self.usrntr_offset_h.set(default_offset_h)
         
-        self.usrntr_rotate = tk.IntVar()
-        self.usrntr_rotate.set(0)
-        
-        self.usrntr_scale = tk.IntVar()
-        self.usrntr_scale.set(100)
-        
-        self.usrntr_opaque = tk.IntVar()
-        self.usrntr_opaque.set(100)
-        
-        self.usrntr_grid = tk.IntVar()
-        self.usrntr_grid.set(100)
-        
         # checkbutton variables, set value after checkbutton is created
-        self.show_mark_bg = tk.BooleanVar()
+        self.grid = tk.BooleanVar()
         self.show_preview = tk.BooleanVar()
         self.snap = tk.BooleanVar()
         self.show_cnvs_bg = tk.BooleanVar()
-        self.grid = tk.BooleanVar()
+        self.show_mark_bg = tk.BooleanVar()
+        
         
         # other icons
         self.guicon_reset = self.proper_load(
@@ -203,13 +208,21 @@ class WaterMarker():
         self.window.rowconfigure(index=3, weight=1)
         # cite: https://stackoverflow.com/questions/45847313/what-does-weight-do-in-tkinter
 
-    def load_default_image(self):
+    def load_defaults(self):
         # TODO: [later] move to load_asset() load asset for UI
-        self.load_image()
         self.default_image_example = self.proper_load(
             filepath='assets/img/advanced_settings_example.png', 
             type_='image', 
             max_size=(440, 300))
+        
+        self.update_switch_button()
+        
+        self.load_image()
+        self.text_mark_maker()
+        
+        self.window_tplvl = tk.Toplevel(bg="white", padx=20, pady=5)
+        self.setup_adv_sets()
+        self.window_tplvl.withdraw()
 
     def setup_widget(self) -> None:
         """
@@ -295,10 +308,10 @@ class WaterMarker():
         self.btn_cnvsbg_color.grid(column=3, row=0)
         
         # block switch
-        self.btn_switch_image = tk.Button(self.block_switch, text="image", command=self.image_mode)
+        self.btn_switch_image = tk.Button(self.block_switch, text="image", command=self.btnf_image_mode)
         self.btn_switch_image.grid(column=0, row=0, padx=2, pady=2)
         
-        self.btn_switch_text = tk.Button(self.block_switch, text="text", command=self.text_mode)
+        self.btn_switch_text = tk.Button(self.block_switch, text="text", command=self.btnf_text_mode)
         self.btn_switch_text.grid(column=1, row=0, padx=2, pady=2)
         
         # block save
@@ -313,9 +326,10 @@ class WaterMarker():
         self.lbl_text = tk.Label(self.block_text, text="text", bg='white')
         self.lbl_text.grid(column=0, row=row, pady=(0, 2), sticky='w')
         
-        self.entry_text = tk.Entry(self.block_text, textvariable=self.usrntr_text, cursor='xterm', width=32) # TODO: add new line function
-        self.entry_text.bind("<Button-1>", self.clear_tkentry_text)        
-        self.entry_text.grid(column=1, row=row, sticky='w')
+        self.text_entry = tk.Text(self.block_text, cursor='xterm', width=32, height=1)
+        self.text_entry.insert(0.0, "enter text as watermark")
+        self.text_entry.bind("<Button-1>", self.clear_tkentry_text)        
+        self.text_entry.grid(column=1, row=row, sticky='w')
         
         # cite: https://stackoverflow.com/questions/66391266/is-it-possible-to-reduce-a-button-size-in-tkinter
         self.pixel = tk.PhotoImage(width=1, height=1)
@@ -330,9 +344,9 @@ class WaterMarker():
             height=22, 
             compound="center", 
             padx=0, pady=0, 
-            command=lambda: self.usrntr_text.set(""),  
+            command=lambda: self.text_entry.delete(0.0, tk.END),  
             )
-        px = self.entry_text.winfo_reqwidth() - self.btn_clear_entry.winfo_reqwidth() - 1
+        px = self.text_entry.winfo_reqwidth() - self.btn_clear_entry.winfo_reqwidth() - 1
         self.btn_clear_entry.grid(column=1, row=row, padx=(px, 0), sticky='w')
         
         row = 1
@@ -380,7 +394,6 @@ class WaterMarker():
         self.lbl_rotate = tk.Label(self.block_panel, text="rotate", bg='white')
         self.lbl_rotate.grid(column=0, row=row, padx=5, sticky='e')
 
-         # FIXME: FormattedSpinbox() cause button of spinbox to shrink and detach
         self.spnbx_rotate = tk.Spinbox(
             self.block_panel, 
             from_=0, to=360, 
@@ -396,26 +409,36 @@ class WaterMarker():
         self.btnrst_rotate = tk.Button(
             self.block_panel, 
             image=self.guicon_reset, # type: ignore
-            bg="white")
+            command=lambda: self.reset_usrntr(func="rotate"), 
+            bg="white"
+            )
         self.btnrst_rotate.grid(column=2, row=row)
         
         self.lbl_scale = tk.Label(self.block_panel, text="scale", bg='white')
         self.lbl_scale.grid(column=3, row=row, padx=(20, 0))
- 
-        self.scale_scale = tk.Scale( # TODO: add tooltip: may cause text watermark to blurr; may cause pixels of misplace & size difference
+
+        self.tick_scale = tk.IntVar(value=0)
+        self.scale_scale = sf.CustomScale( # TODO: [later] add tooltip: may cause text watermark to blurr; may cause pixels of misplace & size difference
             self.block_panel, 
-            from_=1, to=1000, 
-            variable=self.usrntr_scale, 
-            command=self.update_userequest,
-            orient='horizontal', 
-            length=110, width=10, bg='white', 
+            from_=-90, to=90, 
+            tickinterval=0.1, 
+            variable=self.tick_scale, 
+            cz_variable = self.tick_scale, 
+            cmd=self.update_userequest,
+            showvalue=False, 
+            length=110, width=10, 
+            orient='horizontal', bg='white', 
             )
+        self.usrntr_scale = self.scale_scale.result
+        self.scale_scale.bind("<Button-1>", self.scale_scale.command)
         self.scale_scale.grid(column=4, row=row, padx=4, sticky='e')
         
-        self.btnrst_scale = tk.Button( # TODO: add tooltip: reset button of _ function
+        self.btnrst_scale = tk.Button( # TODO: [later] add tooltip: reset button of _ function
             self.block_panel, 
             image=self.guicon_reset, # type: ignore
-            bg="white")
+            command=lambda: self.reset_usrntr(func="scale"), 
+            bg="white"
+            )
         self.btnrst_scale.grid(column=5, row=row, padx=(0, 5))
         
         row = 1
@@ -435,7 +458,9 @@ class WaterMarker():
         self.btnrst_opaque = tk.Button(
             self.block_panel, 
             image=self.guicon_reset, # type: ignore
-            bg="white")
+            command=lambda: self.reset_usrntr(func="opaque"), 
+            bg="white"
+            )
         self.btnrst_opaque.grid(column=2, row=row)
         
         self.ckbtn_grid = tk.Checkbutton(
@@ -443,22 +468,31 @@ class WaterMarker():
             text="grid", 
             variable=self.grid, 
             command=self.update_userequest,  # type: ignore
-            bg='white')
-        self.ckbtn_grid.grid(column=3, row=row, padx=0, sticky='e')
- 
-        self.scale_grid = tk.Scale(
-            self.block_panel, 
-            from_=0, to=1000, 
-            orient='horizontal', 
-            variable=self.usrntr_grid, 
-            command=self.update_userequest, 
-            length=110, width=10, bg='white', 
+            bg='white'
             )
+        self.ckbtn_grid.grid(column=3, row=row, padx=0, sticky='e')
+
+        self.tick_grid = tk.IntVar(value=0)
+        self.scale_grid = sf.CustomScale( # TODO: maybe add a border?
+            self.block_panel, 
+            from_=-100, to=100, 
+            tickinterval=0.1, 
+            variable=self.tick_grid, 
+            cz_variable=self.tick_grid, 
+            cmd=self.update_userequest, 
+            no_symbol=True, 
+            showvalue=False, 
+            length=110, width=10, 
+            orient='horizontal', bg='white' 
+            )
+        self.usrntr_grid = self.scale_grid.repr_num
+        self.scale_grid.bind("<Button-1>", self.scale_grid.command)
         self.scale_grid.grid(column=4, padx=4, row=row)
         
         self.btnrst_grid = tk.Button(
             self.block_panel, 
             image=self.guicon_reset, # type: ignore
+            command=lambda: self.reset_usrntr(func="grid"), 
             bg="white")
         self.btnrst_grid.grid(column=5, row=row, padx=(0, 5))
         
@@ -466,13 +500,59 @@ class WaterMarker():
         self.lbl_watermark_preview = tk.Label(self.block_preview, bg='white')
         self.lbl_watermark_preview.grid(column=0, row=0)
         
-        self.btn_adv_sets = tk.Button(self.block_advset, text='advanced settings', width=17, command=self.adv_sets)
+        self.btn_adv_sets = tk.Button(self.block_advset, text='advanced settings', width=17, command=self.btnf_advset)
         self.btn_adv_sets.grid(column=2, row=0, padx=(249, 0), sticky="w")
     
-    def adv_sets(self) -> None:
-        # FIXME: when clickes button multiple time will generate multiple new window
-        # FIXME: setting(s) will stay at default when reopened.
-        self.window_tplvl = tk.Toplevel(bg="white")
+    def setup_rstble(self) -> None:
+        self.rstble_vals: (
+            dict[
+                _rstable, dict[
+                    _dft_key,   int|
+                                tk.Variable|
+                                list[int]|
+                                list[tk.Variable]
+                    ]
+            ]
+        ) = {
+            "rotate": {
+                "attr_name": self.usrntr_rotate, 
+                "default_val": self.usrntr_rotate.get(), 
+                }, 
+            "scale": {
+                "attr_name": self.tick_scale, 
+                "default_val": 0, 
+                }, 
+            "opaque": {
+                "attr_name": self.usrntr_opaque, 
+                "default_val": self.usrntr_opaque.get(), 
+                }, 
+            "grid": {
+                "attr_name": self.tick_grid, 
+                "default_val": 0, 
+                }, 
+            "adv_sets": {
+                "attr_name": [
+                    self.usrntr_border_w, 
+                    self.usrntr_border_h, 
+                    self.usrntr_offset_w, 
+                    self.usrntr_offset_h, 
+                    ], 
+                "default_val": [
+                    self.usrntr_border_w.get(), 
+                    self.usrntr_border_h.get(), 
+                    self.usrntr_offset_w.get(), 
+                    self.usrntr_offset_h.get(), 
+                    ], 
+            }, 
+        }
+        
+        self.rest_widget:list[sf.CustomScale] = [
+            self.scale_scale, 
+            self.scale_grid, 
+        ]
+    
+    def setup_adv_sets(self) -> None:
+        # self.window_tplvl = tk.Toplevel(bg="white")
         
         row = 0
         self.ckbtn_mark_bg = tk.Checkbutton(
@@ -482,29 +562,22 @@ class WaterMarker():
             command=self.text_mark_maker, 
             bg='white', 
             )
-        self.ckbtn_mark_bg.deselect()
         self.ckbtn_mark_bg.grid(column=0, row=row, padx=(0, 15), sticky='w')
         
         self.btn_cnvsbg_color = tk.Button(
             self.window_tplvl, text="color", 
             command=lambda: self.choose_color(tg="mark bg")
             )
-        self.btn_cnvsbg_color.grid(column=1, row=row, padx=(0, 7))
-        
-        self.btnrst_advset = tk.Button(
-            self.window_tplvl,
-            text="Reset", 
-            image=self.guicon_reset, # type: ignore
-            compound= tk.LEFT, 
-            width=84
-            )
-        self.btnrst_advset.grid(column=2, row=row)
-        
+        self.btn_cnvsbg_color.grid(column=1, row=row)
         
         row = 1
+        self.sprtr_1 = ttk.Separator(self.window_tplvl, orient='horizontal')
+        self.sprtr_1.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
+        
+        row = 2
         self.lbl_border_w = tk.Label(
             self.window_tplvl, 
-            text="adjust watermark  width (ΔW)", 
+            text="adjust watermark width (ΔW)", 
             bg='white'
             )
         self.lbl_border_w.grid(column=0, row=row, padx=(2, 0), sticky='w')
@@ -517,9 +590,9 @@ class WaterMarker():
             width=6
             )
         self.spnbx_mark_w.bind("KeyRelease", self.text_mark_maker)
-        self.spnbx_mark_w.grid(column=2, row=row, sticky='e')
+        self.spnbx_mark_w.grid(column=1, row=row, sticky='e')
 
-        row = 2
+        row = 3
         self.lbl_border_h = tk.Label(
             self.window_tplvl, 
             text="adjust watermark height (ΔH)", 
@@ -535,9 +608,9 @@ class WaterMarker():
             width=6
             )
         self.spnbx_mark_h.bind("KeyRelease", self.text_mark_maker)
-        self.spnbx_mark_h.grid(column=2, row=row, sticky='e')
+        self.spnbx_mark_h.grid(column=1, row=row, sticky='e')
         
-        row = 3
+        row = 4
         self.lbl_offset_h = tk.Label(
             self.window_tplvl, 
             text="adjust text position horizontal(Δh)", 
@@ -553,9 +626,9 @@ class WaterMarker():
             width=6
             )
         self.spnbx_offset_w.bind("KeyRelease", self.text_mark_maker)
-        self.spnbx_offset_w.grid(column=2, row=row, sticky='e')
+        self.spnbx_offset_w.grid(column=1, row=row, sticky='e')
         
-        row = 4
+        row = 5
         self.lbl_offset_v = tk.Label(
             self.window_tplvl, 
             text="adjust text position vertical(Δv)", 
@@ -571,19 +644,48 @@ class WaterMarker():
             width=6
             )
         self.spnbx_offest_h.bind("KeyRelease", self.text_mark_maker)
-        self.spnbx_offest_h.grid(column=2, row=row, sticky='e')
+        self.spnbx_offest_h.grid(column=1, row=row, sticky='e')
         
-        row = 5
-        self.lbl_offset_example = tk.Label(
+        row = 6
+        self.sprtr_2 = ttk.Separator(self.window_tplvl, orient='horizontal')
+        self.sprtr_2.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
+        
+        row = 7
+        self.lbl_example = tk.Label(
+            self.window_tplvl, 
+            text="example diagram:", 
+            bg="white"
+            )
+        self.lbl_example.grid(column=0, row=row, sticky="w")
+        
+        row = 8
+        self.lbl_example_image = tk.Label(
             self.window_tplvl, 
             image=self.default_image_example,  # type: ignore
             bg="white", 
             )
-        self.lbl_offset_example.grid(column=0, row=row, columnspan=3)
-
-        # TODO: add reset button
-        # self.btn_reset_rotate = tk.Button(self.block_panel, image=self.guicon_reset) # type: ignore
-        # self.btn_reset_rotate.grid(column=2, row=row)
+        self.lbl_example_image.grid(column=0, row=row, columnspan=3)
+        
+        row = 9
+        self.sprtr_3 = ttk.Separator(self.window_tplvl, orient='horizontal')
+        self.sprtr_3.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
+        
+        row = 10
+        self.btnrst_advset = tk.Button(
+            self.window_tplvl,
+            text="Reset All", 
+            image=self.guicon_reset, # type: ignore
+            compound= tk.LEFT, 
+            command=lambda: self.reset_usrntr(func="adv_sets"), 
+            )
+        self.btnrst_advset.grid(column=0, row=row, sticky="w")
+        
+        self.btn_hide_tplvl = tk.Button(
+            self.window_tplvl, 
+            text="Done", 
+            command=lambda: self.window_tplvl.withdraw()
+            )
+        self.btn_hide_tplvl.grid(column=1, row=row, sticky="e")
         
     # GUI functions
     def btnf_image_path(self):
@@ -596,7 +698,7 @@ class WaterMarker():
         # self.filepath_mark = filedialog.askopenfilename()
         self.load_mark()
     
-    def image_mode(self) -> None:
+    def btnf_image_mode(self) -> None:
         self.switch_state = 'image'
         if self.filepath_mark is None:
             self.btn_switch_text.config(relief='sunken')
@@ -604,7 +706,7 @@ class WaterMarker():
         else:
             self.load_mark()
         
-    def text_mode(self) -> None:
+    def btnf_text_mode(self) -> None:
         self.switch_state = 'text'
         self.update_switch_button()
         self.text_mark_maker()
@@ -616,6 +718,13 @@ class WaterMarker():
             self.text_mark_maker()
         self.remove_exist_watermark(method="motion")
     
+    def btnf_advset(self) -> None:
+        if self.window_tplvl.winfo_exists():
+            self.window_tplvl.deiconify()
+        else:
+            self.window_tplvl = tk.Toplevel(bg="white", padx=20, pady=5)
+            self.setup_adv_sets()
+        
     def font_selected(self, event=None) -> None:
         rq_font = self.selector_font.get()
         
@@ -646,12 +755,30 @@ class WaterMarker():
                     message="the font selected has more than one style, and no default value, please select one."
                     )
     
+    def reset_usrntr(self, func:_rstable) -> None:
+        if func == "adv_sets":
+            for idx, value in enumerate(self.rstble_vals[func]["attr_name"]): # type: ignore
+                value.set(self.rstble_vals[func]["default_val"][idx]) # type: ignore
+            return
+        self.rstble_vals[func]["attr_name"].set( # type: ignore
+            self.rstble_vals[func].get("default_val")
+        )
+        # self.scale_scale.set(value=float(0))
+        for widget in self.rest_widget:
+            widget.command()
+        print(f"in reset of '{func}', default value: '{self.rstble_vals[func].get("default_val")}', current value: '{self.rstble_vals[func].get("attr_name")}'")
+        # print(f"in reset of '{func}', default value: '{self.rstble_vals[func].get("default_val")}', scale: '{self.usrntr_scale.get()}', sf.result: '{self.scale_scale.result.get()}'.")
+        self.update_userequest()
+    
     # key functions
     def operate(self) -> None:
         """
         the power button.
         """
         self.window.mainloop()
+        
+    def usrntr_text(self) -> str:
+        return self.text_entry.get(0.0, "end-1c")
         
     def proper_load(
         self, 
@@ -882,7 +1009,7 @@ class WaterMarker():
         # get border of the text from PIL
         _ = Image.new("RGBA", text_watermark_max_size)
         f = ImageDraw.Draw(_)
-        f_bbox = f.textbbox((0, 0), self.usrntr_text.get(), font=fnt)
+        f_bbox = f.textbbox((0, 0), self.usrntr_text(), font=fnt)
         
         # get text border sizes of the text with font
         width = f_bbox[2] - f_bbox[0] + self.usrntr_border_w.get()
@@ -894,7 +1021,7 @@ class WaterMarker():
             base = Image.new("RGBA", (width, height), (255, 255, 255, 0))
             
         d = ImageDraw.Draw(base)
-        d.text(offset, self.usrntr_text.get(), font=fnt, fill=text_color)
+        d.text(offset, self.usrntr_text(), font=fnt, fill=text_color)
         
         base.save(watermark_fp)
         
@@ -926,8 +1053,8 @@ class WaterMarker():
             if not save:
                 return
         
-        true_markpil_width = round(np.round(self.mark_pil.width * self.usrntr_scale.get() / 100))
-        true_markpil_height = round(np.round(self.mark_pil.height * self.usrntr_scale.get() / 100))
+        true_markpil_width = round(np.round(self.mark_pil.width * self.usrntr_scale.get()))
+        true_markpil_height = round(np.round(self.mark_pil.height * self.usrntr_scale.get()))
         
         if self.snap and self.snap_position:
             x, y = self.snap_position
@@ -993,10 +1120,10 @@ class WaterMarker():
             x_max = self.canvas.winfo_reqwidth()
             y_max = self.canvas.winfo_reqheight()
         elif on == "image":
-            scaled_markpil_width = round(np.round(self.mark_pil.width * self.usrntr_scale.get() / 100))
+            scaled_markpil_width = round(np.round(self.mark_pil.width * self.usrntr_scale.get()))
             width = self.image_pil.width + scaled_markpil_width
             
-            scaled_markpil_height = round(np.round(self.mark_pil.height * self.usrntr_scale.get() / 100))
+            scaled_markpil_height = round(np.round(self.mark_pil.height * self.usrntr_scale.get()))
             height = self.image_pil.height + scaled_markpil_height
             
             grid_scale = min(self.image_width_scale, self.image_height_scale)
@@ -1045,9 +1172,9 @@ class WaterMarker():
         
     def update_mode(self) -> None:
         if self.switch_state == "text":
-            self.image_mode()
+            self.btnf_image_mode()
         elif self.switch_state == 'image':
-            self.text_mode()
+            self.btnf_text_mode()
         
     def update_mark_size(self):
         width = np.round(self.mark_pil.width / self.image_width_scale)
@@ -1089,6 +1216,31 @@ class WaterMarker():
             print("making sure to remove unwanted watermarks")
     
     # support functions
+    def awake_custom(self, event=None) -> None:
+        offset = -1
+        for widget in self.rest_widget:
+            widget.command()
+            
+            relative_x = widget.winfo_x()
+            relative_y = widget.winfo_y()
+            scale_w = round(widget.winfo_reqwidth() / 2)
+            lbl_w = round(widget.lbl.winfo_reqwidth() / 2)
+            lbl_h = widget.lbl.winfo_reqheight()
+            
+            x = relative_x + scale_w - lbl_w
+            y = relative_y - lbl_h + offset
+            
+            widget.lbl.place(x=x, y=y)
+            widget.grid(pady=(lbl_h, 0))  
+            offset += 9
+        """
+        holy steak is this a mess, 
+        grid widget's position one influence another, 
+        and after use of pady to get space of label,
+        mystical offset of 9 appears.
+        """
+            
+            
     def store_pil(self, pil:Image.Image, type_:_img) -> None:
         if type_ == 'image':
             self.image_pil = pil
@@ -1104,9 +1256,9 @@ class WaterMarker():
         Args:
             event (_type_): _description_ 
         """
-        self.usrntr_text.set("")
-        self.entry_text.unbind("<Button-1>")
-        self.entry_text.bind("<KeyRelease>", self.text_mark_maker)
+        self.text_entry.delete(0.0, tk.END)
+        self.text_entry.unbind("<Button-1>")
+        self.text_entry.bind("<KeyRelease>", self.text_mark_maker)
         
     def get_image_size(
         self, 
@@ -1121,7 +1273,7 @@ class WaterMarker():
             size = (round(width), round(height))
         else:
             size = self.image_size_calculate(pil.width, pil.height, type_=type_, max_size=max_size)
-        rq_scale = self.usrntr_scale.get() / 100
+        rq_scale = self.usrntr_scale.get()
         rq_width = np.round(size[0] * rq_scale)
         rq_height = np.round(size[1] * rq_scale)
         return (round(rq_width), round(rq_height))
@@ -1199,7 +1351,7 @@ class WaterMarker():
                 self.canvas.delete(item)
         
     def __prnt_style_without_regular_(self):
-        font_dict = support_func.get_sysfont_sorted()
+        font_dict = sf.get_sysfont_sorted()
         for name in font_dict:
             all_style = []
             for style in font_dict[name]:

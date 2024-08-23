@@ -1,8 +1,14 @@
 import tkinter as tk
-import tkinter.ttk as ttk
+import numpy as np
 
+from typing import Literal
+from typing_extensions import TypeAlias
+from collections.abc import Callable
 from matplotlib import font_manager
 from PIL import ImageFont
+
+_callable:TypeAlias = Callable
+_sybl:TypeAlias = Literal["%"]
 
 class ToolTip(object):
     """
@@ -101,25 +107,47 @@ def get_sysfont_sorted() -> dict[str, dict[str, str]]:
         fonts_dict[font_name][style] = file_name
     return dict(fonts_dict.items())
 
-class FormattedSpinbox(ttk.Spinbox):
+class CustomScale(tk.Scale):
     """
-    A ttk.Spinbox that displays a number followed by a specify symbol.
+    A tk.Scale that set scale indicator to the middle, 
+    and can customize the value of ticks on both side 
+    to have different tickinterval and limits.
+    
+    Args:
+    cz_variable (tk.Variable): must be the same as the variable
+    cmd (Callable): the function to be called after any interaction
+    
+    Usages:
+    
     
     cite: https://stackoverflow.com/questions/56613120/python-3-ttk-spinbox-format-option
     """
-    def __init__(self, master, symbol:str, **kwargs):
+    def __init__(self, master, cz_variable:tk.Variable, cmd:_callable, no_symbol:bool=False, **kwargs):
         kwargs['command'] = self.command
         super().__init__(master, **kwargs)
-        self.symbol = symbol
+        self.result = tk.DoubleVar(value=1)
+        self.repr_num = tk.IntVar()
+        self.text = tk.StringVar()
+        self.variable = cz_variable
+        self.cmd = cmd
+        self.no_symbol = no_symbol
+        self.lbl = tk.Label(master, textvariable=self.text, bg="white")
         
-    def set(self, value):
-        super().set(value)
+        
+    def command(self, event=None, *args) -> None:
+        value = self.variable.get() / 100
+        if value > 0:
+            modify = 10
+        else:
+            modify = 1
+        self.result.set(np.round(1 + modify * value, decimals=2))
+        fmtd = f"{self.result.get():0.0%}"
+        if self.no_symbol:
+            fmtd = fmtd.rstrip("%")
+        self.text.set(fmtd)
+        self.repr_num.set(int(fmtd.rstrip("%")))
+        self.cmd()
+
+    def set(self, value:int|float) -> None:
+        self.variable.set(value)
         self.command()
-        
-    def get(self):
-        return int(super().get().strip().split()[0])
-    
-    def command(self):
-        value = self.get()
-        self.delete(0, tk.END)
-        self.insert(0, f"{value} {self.symbol}")
