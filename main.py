@@ -66,12 +66,12 @@ class WaterMarker():
     """
     def __init__(self) -> None:
         self.window = tk.Tk()
-        self.window.title("💧MarkIt.") # TODO: set color of 💧 to blue
+        self.window.title("💧MarkIt.")
         self.window.geometry(f"{window_width}x{window_height}")
-        # self.window.resizable(width=False, height=False)
-        self.window.option_add("*Font", default_font_fmt)
         self.window.config(background="white")
+        # self.window.resizable(width=False, height=False)
         
+        self.setup_option()
         self.setup_attribute()
         self.setup_variable()
         self.setup_labelframe()
@@ -79,14 +79,14 @@ class WaterMarker():
         self.load_defaults()
         self.setup_rstble()
         
-        
-        
-        
         self.window.wait_visibility()
         self.awake_custom()
         
-        self.window.option_add("*Dialog.msg.font", "Arial -16")
-        
+    def setup_option(self) -> None:
+        # must set before widgets are created, cite: https://tcl.tk/man/tcl8.6/TkCmd/option.html
+        self.window.option_add("*Font", default_font_fmt)
+        self.window.option_add("*Button.cursor", "hand2")
+        # self.window.option_add("*Dialog.msg.font", 'Helvetica 30') # not working
         
     def setup_attribute(self) -> None:
         """
@@ -147,6 +147,11 @@ class WaterMarker():
         self.usrntr_offset_w.set(default_offset_w)
         self.usrntr_offset_h = tk.IntVar()
         self.usrntr_offset_h.set(default_offset_h)
+        
+        self.usrntr_shift_h = tk.IntVar()
+        self.usrntr_shift_h.set(0)
+        self.usrntr_shift_v = tk.IntVar()
+        self.usrntr_shift_v.set(0)
         
         # checkbutton variables, set value after checkbutton is created
         self.grid = tk.BooleanVar()
@@ -338,7 +343,6 @@ class WaterMarker():
             text="X", 
             bg="white", 
             border=0, 
-            cursor="hand2", # TODO: change every button and checkbutton's cursor to hand2
             image=self.pixel, # add a transparent image to force tk.Button use pixels
             width=22, 
             height=22, 
@@ -536,12 +540,16 @@ class WaterMarker():
                     self.usrntr_border_h, 
                     self.usrntr_offset_w, 
                     self.usrntr_offset_h, 
+                    self.usrntr_shift_h, 
+                    self.usrntr_shift_v, 
                     ], 
                 "default_val": [
                     self.usrntr_border_w.get(), 
                     self.usrntr_border_h.get(), 
                     self.usrntr_offset_w.get(), 
                     self.usrntr_offset_h.get(), 
+                    self.usrntr_shift_h.get(), 
+                    self.usrntr_shift_v.get(), 
                     ], 
             }, 
         }
@@ -556,8 +564,8 @@ class WaterMarker():
             self.scale_grid, 
             self.spnbx_mark_w, 
             self.spnbx_mark_h, 
-            self.spnbx_offset_w, 
             self.spnbx_offset_h, 
+            self.spnbx_offset_v, 
         ]
     
     def setup_adv_sets(self) -> None:
@@ -580,13 +588,13 @@ class WaterMarker():
         self.btn_cnvsbg_color.grid(column=1, row=row)
         
         row = 1
-        self.sprtr_1 = ttk.Separator(self.window_tplvl, orient='horizontal')
-        self.sprtr_1.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
+        self.sprtr_watermark_bg = ttk.Separator(self.window_tplvl, orient='horizontal')
+        self.sprtr_watermark_bg.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
         
         row = 2
         self.lbl_border_w = tk.Label(
             self.window_tplvl, 
-            text="adjust watermark width (ΔW)", 
+            text="adjust watermark width", 
             bg='white'
             )
         self.lbl_border_w.grid(column=0, row=row, padx=(2, 0), sticky='w')
@@ -605,7 +613,7 @@ class WaterMarker():
         row = 3
         self.lbl_border_h = tk.Label(
             self.window_tplvl, 
-            text="adjust watermark height (ΔH)", 
+            text="adjust watermark height", 
             bg='white'
             )
         self.lbl_border_h.grid(column=0, row=row, padx=(2, 0), sticky='w')
@@ -624,12 +632,12 @@ class WaterMarker():
         row = 4
         self.lbl_offset_h = tk.Label(
             self.window_tplvl, 
-            text="adjust text position horizontal(Δh)", 
+            text="adjust text position horizontally(Δh)", 
             bg='white'
             )
         self.lbl_offset_h.grid(column=0, row=row, padx=(2, 0), sticky='w')
         
-        self.spnbx_offset_w = sf.CustomSpinbox(
+        self.spnbx_offset_h = sf.CustomSpinbox(
             self.window_tplvl, 
             from_=-200, to=200, 
             cmd=self.text_mark_maker, 
@@ -637,18 +645,18 @@ class WaterMarker():
             cz_variable=self.usrntr_offset_w, 
             width=6
             )
-        self.spnbx_offset_w.bind("<KeyRelease>", self.text_mark_maker)
-        self.spnbx_offset_w.grid(column=1, row=row, sticky='e')
+        self.spnbx_offset_h.bind("<KeyRelease>", self.text_mark_maker)
+        self.spnbx_offset_h.grid(column=1, row=row, sticky='e')
         
         row = 5
         self.lbl_offset_v = tk.Label(
             self.window_tplvl, 
-            text="adjust text position vertical(Δv)", 
+            text="adjust text position vertically(Δv)", 
             bg='white'
             )
         self.lbl_offset_v.grid(column=0, row=row, padx=(2, 0), sticky='w')
         
-        self.spnbx_offset_h = sf.CustomSpinbox(
+        self.spnbx_offset_v = sf.CustomSpinbox(
             self.window_tplvl, 
             from_=-200, to=200, 
             cmd=self.text_mark_maker, 
@@ -656,14 +664,52 @@ class WaterMarker():
             cz_variable=self.usrntr_offset_h, 
             width=6
             )
-        self.spnbx_offset_h.bind("<KeyRelease>", self.text_mark_maker)
-        self.spnbx_offset_h.grid(column=1, row=row, sticky='e')
+        self.spnbx_offset_v.bind("<KeyRelease>", self.text_mark_maker)
+        self.spnbx_offset_v.grid(column=1, row=row, sticky='e')
         
         row = 6
-        self.sprtr_2 = ttk.Separator(self.window_tplvl, orient='horizontal')
-        self.sprtr_2.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
+        self.lbl_shift_h = tk.Label(
+            self.window_tplvl, 
+            text="adjust watermark position horizontally", 
+            bg='white'
+            )
+        self.lbl_shift_h.grid(column=0, row=row, padx=(2, 0), sticky='w')
+        
+        self.spnbx_shift_h = sf.CustomSpinbox(
+            self.window_tplvl, 
+            from_=-200, to=200, 
+            cmd=self.text_mark_maker, 
+            textvariable=self.usrntr_shift_h, 
+            cz_variable=self.usrntr_shift_h, 
+            width=6
+            )
+        self.spnbx_shift_h.bind("<KeyRelease>", self.text_mark_maker)
+        self.spnbx_shift_h.grid(column=1, row=row, sticky='e')
         
         row = 7
+        self.lbl_shift_v = tk.Label(
+            self.window_tplvl, 
+            text="adjust watermark position vertically", 
+            bg='white'
+            )
+        self.lbl_shift_v.grid(column=0, row=row, padx=(2, 0), sticky='w')
+        
+        self.spnbx_shift_v = sf.CustomSpinbox(
+            self.window_tplvl, 
+            from_=-200, to=200, 
+            cmd=self.text_mark_maker, 
+            textvariable=self.usrntr_shift_v, 
+            cz_variable=self.usrntr_shift_v, 
+            width=6
+            )
+        self.spnbx_shift_v.bind("<KeyRelease>", self.text_mark_maker)
+        self.spnbx_shift_v.grid(column=1, row=row, sticky='e')
+        
+        row = 8
+        self.sprtr_adjust = ttk.Separator(self.window_tplvl, orient='horizontal')
+        self.sprtr_adjust.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
+        
+        row = 9
         self.lbl_example = tk.Label(
             self.window_tplvl, 
             text="example diagram:", 
@@ -671,7 +717,7 @@ class WaterMarker():
             )
         self.lbl_example.grid(column=0, row=row, sticky="w")
         
-        row = 8
+        row = 10
         self.lbl_example_image = tk.Label(
             self.window_tplvl, 
             image=self.default_image_example,  # type: ignore
@@ -679,11 +725,11 @@ class WaterMarker():
             )
         self.lbl_example_image.grid(column=0, row=row, columnspan=3)
         
-        row = 9
-        self.sprtr_3 = ttk.Separator(self.window_tplvl, orient='horizontal')
-        self.sprtr_3.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
+        row = 11
+        self.sprtr_diagram = ttk.Separator(self.window_tplvl, orient='horizontal')
+        self.sprtr_diagram.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
         
-        row = 10
+        row = 12
         self.btnrst_advset = tk.Button(
             self.window_tplvl,
             text="Reset All", 
@@ -1078,8 +1124,8 @@ class WaterMarker():
             if not save:
                 return
         
-        true_markpil_width = round(np.round(self.mark_pil.width * self.usrntr_scale.get()))
-        true_markpil_height = round(np.round(self.mark_pil.height * self.usrntr_scale.get()))
+        true_markpil_width:int = round(np.round(self.mark_pil.width * self.usrntr_scale.get()))
+        true_markpil_height:int = round(np.round(self.mark_pil.height * self.usrntr_scale.get()))
         
         if self.snap and self.snap_position:
             x, y = self.snap_position
@@ -1090,10 +1136,10 @@ class WaterMarker():
         else:
             true_x = self.true_position[0] - self.mark_offset_x_min - self.image_datum_x
             true_y = self.true_position[1] - self.mark_offset_y_min - self.image_datum_y
-            x = np.round(true_x * self.image_width_scale)
-            y = np.round(true_y * self.image_height_scale)
+            x:int = round(np.round(true_x * self.image_width_scale)) + self.usrntr_shift_h.get()
+            y:int = round(np.round(true_y * self.image_height_scale)) + self.usrntr_shift_v.get()
             
-        offset = (round(x), round(y)) # FIXME: add position adjust, since preview and result has misalign
+        offset = (x, y)
         
         mark = self.mark_pil.copy()
         size = true_markpil_width, true_markpil_height
@@ -1354,10 +1400,10 @@ class WaterMarker():
         condition = []
         vaild = True
         if width <= 0:
-            condition.append(f"ΔW > {-(bbox[2] - bbox[0])}")
+            condition.append(f"watermark width > {-(bbox[2] - bbox[0])}")
             vaild = False
         if height <= 0:
-            condition.append(f"ΔH > {-(bbox[3] - bbox[1])}")
+            condition.append(f"watermark height > {-(bbox[3] - bbox[1])}")
             vaild = False
         if not vaild:
             messagebox.showwarning(
