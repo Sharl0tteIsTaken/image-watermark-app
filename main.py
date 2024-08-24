@@ -76,10 +76,10 @@ class WaterMarker():
         self.setup_variable()
         self.setup_labelframe()
         self.setup_widget()
+        self.load_defaults()
         self.setup_rstble()
         
         
-        self.load_defaults()
         
         
         self.window.wait_visibility()
@@ -99,7 +99,7 @@ class WaterMarker():
         self.is_image = False
         self.is_mark = False
         
-        self.switch_state:_state = "text" # TODO: [last] see how effective is this TypeAlias thing
+        self.switch_state:_state = "text"
         self.filepath_image:str = 'assets/img/default_image.png'
         self.filepath_mark:str|None = None
         
@@ -425,7 +425,7 @@ class WaterMarker():
             variable=self.tick_scale, 
             cz_variable = self.tick_scale, 
             cmd=self.update_userequest,
-            showvalue=False, 
+            # showvalue=False, 
             length=110, width=10, 
             orient='horizontal', bg='white', 
             )
@@ -473,7 +473,7 @@ class WaterMarker():
         self.ckbtn_grid.grid(column=3, row=row, padx=0, sticky='e')
 
         self.tick_grid = tk.IntVar(value=0)
-        self.scale_grid = sf.CustomScale( # TODO: maybe add a border?
+        self.scale_grid = sf.CustomScale(
             self.block_panel, 
             from_=-100, to=100, 
             tickinterval=0.1, 
@@ -481,7 +481,7 @@ class WaterMarker():
             cz_variable=self.tick_grid, 
             cmd=self.update_userequest, 
             no_symbol=True, 
-            showvalue=False, 
+            # showvalue=False, 
             length=110, width=10, 
             orient='horizontal', bg='white' 
             )
@@ -550,6 +550,15 @@ class WaterMarker():
             self.scale_scale, 
             self.scale_grid, 
         ]
+        
+        self.standby_widget:list[sf.CustomScale|sf.CustomSpinbox] = [
+            self.scale_scale, 
+            self.scale_grid, 
+            self.spnbx_mark_w, 
+            self.spnbx_mark_h, 
+            self.spnbx_offset_w, 
+            self.spnbx_offset_h, 
+        ]
     
     def setup_adv_sets(self) -> None:
         # self.window_tplvl = tk.Toplevel(bg="white")
@@ -582,14 +591,15 @@ class WaterMarker():
             )
         self.lbl_border_w.grid(column=0, row=row, padx=(2, 0), sticky='w')
         
-        self.spnbx_mark_w = tk.Spinbox(
+        self.spnbx_mark_w = sf.CustomSpinbox(
             self.window_tplvl, 
             from_=-200, to=200, 
-            command=self.text_mark_maker, 
+            cmd=self.text_mark_maker, 
             textvariable=self.usrntr_border_w, 
+            cz_variable=self.usrntr_border_w, 
             width=6
             )
-        self.spnbx_mark_w.bind("KeyRelease", self.text_mark_maker)
+        self.spnbx_mark_w.bind("<KeyRelease>", self.text_mark_maker)
         self.spnbx_mark_w.grid(column=1, row=row, sticky='e')
 
         row = 3
@@ -600,14 +610,15 @@ class WaterMarker():
             )
         self.lbl_border_h.grid(column=0, row=row, padx=(2, 0), sticky='w')
         
-        self.spnbx_mark_h = tk.Spinbox(
+        self.spnbx_mark_h = sf.CustomSpinbox(
             self.window_tplvl, 
             from_=-200, to=200, 
-            command=self.text_mark_maker, 
+            cmd=self.text_mark_maker, 
             textvariable=self.usrntr_border_h, 
+            cz_variable=self.usrntr_border_h, 
             width=6
             )
-        self.spnbx_mark_h.bind("KeyRelease", self.text_mark_maker)
+        self.spnbx_mark_h.bind("<KeyRelease>", self.text_mark_maker)
         self.spnbx_mark_h.grid(column=1, row=row, sticky='e')
         
         row = 4
@@ -618,14 +629,15 @@ class WaterMarker():
             )
         self.lbl_offset_h.grid(column=0, row=row, padx=(2, 0), sticky='w')
         
-        self.spnbx_offset_w = tk.Spinbox(
+        self.spnbx_offset_w = sf.CustomSpinbox(
             self.window_tplvl, 
             from_=-200, to=200, 
-            command=self.text_mark_maker, 
+            cmd=self.text_mark_maker, 
             textvariable=self.usrntr_offset_w, 
+            cz_variable=self.usrntr_offset_w, 
             width=6
             )
-        self.spnbx_offset_w.bind("KeyRelease", self.text_mark_maker)
+        self.spnbx_offset_w.bind("<KeyRelease>", self.text_mark_maker)
         self.spnbx_offset_w.grid(column=1, row=row, sticky='e')
         
         row = 5
@@ -636,15 +648,16 @@ class WaterMarker():
             )
         self.lbl_offset_v.grid(column=0, row=row, padx=(2, 0), sticky='w')
         
-        self.spnbx_offest_h = tk.Spinbox(
+        self.spnbx_offset_h = sf.CustomSpinbox(
             self.window_tplvl, 
             from_=-200, to=200, 
-            command=self.text_mark_maker, 
+            cmd=self.text_mark_maker, 
             textvariable=self.usrntr_offset_h, 
+            cz_variable=self.usrntr_offset_h, 
             width=6
             )
-        self.spnbx_offest_h.bind("KeyRelease", self.text_mark_maker)
-        self.spnbx_offest_h.grid(column=1, row=row, sticky='e')
+        self.spnbx_offset_h.bind("<KeyRelease>", self.text_mark_maker)
+        self.spnbx_offset_h.grid(column=1, row=row, sticky='e')
         
         row = 6
         self.sprtr_2 = ttk.Separator(self.window_tplvl, orient='horizontal')
@@ -759,15 +772,12 @@ class WaterMarker():
         if func == "adv_sets":
             for idx, value in enumerate(self.rstble_vals[func]["attr_name"]): # type: ignore
                 value.set(self.rstble_vals[func]["default_val"][idx]) # type: ignore
-            return
-        self.rstble_vals[func]["attr_name"].set( # type: ignore
-            self.rstble_vals[func].get("default_val")
-        )
-        # self.scale_scale.set(value=float(0))
-        for widget in self.rest_widget:
+        else:
+            self.rstble_vals[func]["attr_name"].set( # type: ignore
+                self.rstble_vals[func].get("default_val")
+            )
+        for widget in self.standby_widget:
             widget.command()
-        print(f"in reset of '{func}', default value: '{self.rstble_vals[func].get("default_val")}', current value: '{self.rstble_vals[func].get("attr_name")}'")
-        # print(f"in reset of '{func}', default value: '{self.rstble_vals[func].get("default_val")}', scale: '{self.usrntr_scale.get()}', sf.result: '{self.scale_scale.result.get()}'.")
         self.update_userequest()
     
     # key functions
@@ -806,8 +816,12 @@ class WaterMarker():
             ImageTk.PhotoImage: the image specified.
         """
         
-        self.watermark_type = type_
-        image_pil = Image.open(filepath)
+        self.watermark_type = type_ # TODO: [last] don't know the purpose of this, remove when sure.
+        
+        # load image and convert it to RGBA, to avoid ValueError: images do not match
+        # cite: https://stackoverflow.com/questions/12291641/python-pil-valueerror-images-do-not-match
+        image_pil = Image.open(filepath).convert("RGBA")
+        
         
         if alpha:
             image_pil.putalpha(alpha)
@@ -997,6 +1011,12 @@ class WaterMarker():
         rq_font = self.fonts_dict[name][style] # rq: requested
         pixel_size = self.usrntr_fontsize.get() / 0.75
         
+        try:
+            border_w = self.usrntr_border_w.get()
+            border_h = self.usrntr_border_h.get()
+        except tk.TclError: # if input is not a number 
+            return
+        
         opaque = self.usrntr_opaque.get()
         alpha = round(np.round((opaque/100) * 255))
         angle = self.usrntr_rotate.get()
@@ -1012,13 +1032,18 @@ class WaterMarker():
         f_bbox = f.textbbox((0, 0), self.usrntr_text(), font=fnt)
         
         # get text border sizes of the text with font
-        width = f_bbox[2] - f_bbox[0] + self.usrntr_border_w.get()
-        height = f_bbox[3] - f_bbox[1] + self.usrntr_border_h.get()
+        width = f_bbox[2] - f_bbox[0] + border_w
+        height = f_bbox[3] - f_bbox[1] + border_h
+        
+        # make sure width and height of image > 0
+        if not self.length_valid(width, height, f_bbox):
+            return
         
         if self.show_mark_bg.get():
             base = Image.new("RGBA", (width, height), (*self.mark_bg, 255))
         else:
             base = Image.new("RGBA", (width, height), (255, 255, 255, 0))
+            
             
         d = ImageDraw.Draw(base)
         d.text(offset, self.usrntr_text(), font=fnt, fill=text_color)
@@ -1085,22 +1110,7 @@ class WaterMarker():
         result_image = self.image_pil.copy()
         result_image.alpha_composite(result_mark, offset)
         result_image.save("result.png")
-        # TODO: add try except ValueError, suspect caused by watermark larger then image.
-    r"""
-        File "C:\Users\james\AppData\Local\Programs\Python\Python312\Lib\tkinter\__init__.py", line 1968, in __call__
-            return self.func(*args)
-                ^^^^^^^^^^^^^^^^
-        File "c:\Users\james\Documents\.MyDocs\Projects\#100Days\day-85-image_watermark_app\main.py", line 996, in save_image
-            result_image.alpha_composite(result_mark, offset)
-        File "C:\Users\james\Documents\.MyDocs\Projects\.venv\Lib\site-packages\PIL\Image.py", line 1904, in alpha_composite
-            result = alpha_composite(background, overlay)
-                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        File "C:\Users\james\Documents\.MyDocs\Projects\.venv\Lib\site-packages\PIL\Image.py", line 3517, in alpha_composite
-            return im1._new(core.alpha_composite(im1.im, im2.im))
-                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        ValueError: images do not match
-    """
-    
+        
     def grid_mark_maker(self, x:int, y:int, grid_space:int, mark:Image.Image) -> Image.Image:
         width = self.image_pil.width
         height = self.image_pil.height
@@ -1217,7 +1227,7 @@ class WaterMarker():
     
     # support functions
     def awake_custom(self, event=None) -> None:
-        offset = -1
+        offset = 3
         for widget in self.rest_widget:
             widget.command()
             
@@ -1230,16 +1240,7 @@ class WaterMarker():
             x = relative_x + scale_w - lbl_w
             y = relative_y - lbl_h + offset
             
-            widget.lbl.place(x=x, y=y)
-            widget.grid(pady=(lbl_h, 0))  
-            offset += 9
-        """
-        holy steak is this a mess, 
-        grid widget's position one influence another, 
-        and after use of pady to get space of label,
-        mystical offset of 9 appears.
-        """
-            
+            widget.lbl.place(x=x, y=y,)
             
     def store_pil(self, pil:Image.Image, type_:_img) -> None:
         if type_ == 'image':
@@ -1247,7 +1248,6 @@ class WaterMarker():
         elif type_ == 'mark' or type_ == "text":
             self.mark_pil = pil
             
-        
     def clear_tkentry_text(self, event=None) -> None:
         """
         remove default text in tk.Entry, when user click in tk.Entry
@@ -1350,6 +1350,22 @@ class WaterMarker():
             for item in self.grid_watermark_preview:
                 self.canvas.delete(item)
         
+    def length_valid(self, width:int, height:int, bbox:tuple[int, int, int, int]) -> bool:
+        condition = []
+        vaild = True
+        if width <= 0:
+            condition.append(f"ΔW > {-(bbox[2] - bbox[0])}")
+            vaild = False
+        if height <= 0:
+            condition.append(f"ΔH > {-(bbox[3] - bbox[1])}")
+            vaild = False
+        if not vaild:
+            messagebox.showwarning(
+                title="Invaild adjust value.", 
+                message=f"Length of width and height of square must > 1.\n In this case, {', '.join(condition)}."
+                )
+        return vaild
+       
     def __prnt_style_without_regular_(self):
         font_dict = sf.get_sysfont_sorted()
         for name in font_dict:

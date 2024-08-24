@@ -113,26 +113,54 @@ class CustomScale(tk.Scale):
     and can customize the value of ticks on both side 
     to have different tickinterval and limits.
     
-    Args:
+    Arguments:
+    
     cz_variable (tk.Variable): must be the same as the variable
     cmd (Callable): the function to be called after any interaction
+    **kwargs: any supported by tk.Scale
     
-    Usages:
+    Example:
     
+     >>> import support_func as sf 
+     >>> tick = tk.IntVar()
+     >>> c_scale = sf.CustomScale(
+     >>>    ...
+     >>>    variable=tick, 
+     >>>    cz_variable=tick, 
+     >>>    cmd=foo, 
+     >>>    ...
+     >>> )
+    
+    - get unformatted value:
+     >>> var = c_scale.result
+     >>> value = var.get()
+    
+    - set value:
+     >>> tick.set(value=value)
     
     cite: https://stackoverflow.com/questions/56613120/python-3-ttk-spinbox-format-option
     """
     def __init__(self, master, cz_variable:tk.Variable, cmd:_callable, no_symbol:bool=False, **kwargs):
         kwargs['command'] = self.command
         super().__init__(master, **kwargs)
+        
         self.result = tk.DoubleVar(value=1)
         self.repr_num = tk.IntVar()
         self.text = tk.StringVar()
+        
         self.variable = cz_variable
         self.cmd = cmd
         self.no_symbol = no_symbol
-        self.lbl = tk.Label(master, textvariable=self.text, bg="white")
         
+        self.pixel = tk.PhotoImage(width=1, height=1)
+        self.lbl = tk.Label(
+            master, 
+            textvariable=self.text, 
+            image=self.pixel,
+            compound="center", 
+            width=105, 
+            bg="white"
+            )
         
     def command(self, event=None, *args) -> None:
         value = self.variable.get() / 100
@@ -151,3 +179,66 @@ class CustomScale(tk.Scale):
     def set(self, value:int|float) -> None:
         self.variable.set(value)
         self.command()
+        
+
+class CustomSpinbox(tk.Spinbox):
+    """
+    A tk.Spinbox that displays an additional '+' symbol before positive numbers.
+    
+    Arguments:
+    
+    cz_variable (tk.Variable): must be the same as the variable
+    cmd (Callable): the function to be called after any interaction
+    **kwargs: any supported by tk.Spinbox
+    
+    Example(just like regular tk.spinbox):
+    
+     >>> import support_func as sf 
+     >>> var = tk.IntVar()
+     >>> scale = sf.CustomSpinbox(
+     >>>    ...
+     >>>    textvariable=var, 
+     >>>    cz_variable=var, 
+     >>>    cmd=foo, 
+     >>>    ...
+     >>> )
+     
+    - get unformatted value:
+     >>> value = var.get()
+     
+    - set value:
+     >>> var.set(value=value)
+    
+    cite: https://stackoverflow.com/questions/56613120/python-3-ttk-spinbox-format-option
+    """
+    def __init__(self, master, cz_variable:tk.Variable, cmd:_callable, **kwargs):
+        kwargs['command'] = self.command
+        super().__init__(master, **kwargs)
+        self.variable = cz_variable
+        self.cmd = cmd
+        self.command()
+        
+    def command(self, event=None, *args) -> None:
+        try:
+            value = self.variable.get()
+        except tk.TclError as error: # in place to catch error caused by 08 and 09
+            value = int(str(error).split('"')[1].lstrip("0"))
+        self.value = value
+        
+        if value > 0:
+            s = "+"
+        else:
+            s = ""
+        
+        self.delete(0, tk.END)
+        self.insert(0, f'{s}{value}')
+        self.cmd()
+        
+    def set(self, value):
+        self.variable.set(value)
+        self.command()
+    
+    def get(self):
+        return self.value
+
+
