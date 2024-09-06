@@ -8,7 +8,6 @@ from matplotlib import font_manager
 from PIL import ImageFont
 
 _callable:TypeAlias = Callable
-_sybl:TypeAlias = Literal["%"]
 
 class ToolTip(object):
     """
@@ -224,8 +223,7 @@ class CustomSpinbox(tk.Spinbox):
         except tk.TclError as error: # in place to catch error caused by 08 and 09
             value = int(str(error).split('"')[1].lstrip("0"))
         self.value = value
-        
-        if value > 0:
+        if value >= 0:
             s = "+"
         else:
             s = ""
@@ -240,5 +238,3 @@ class CustomSpinbox(tk.Spinbox):
     
     def get(self):
         return self.value
-
-
