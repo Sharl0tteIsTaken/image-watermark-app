@@ -18,6 +18,7 @@ Procfile
 settings.json
 db_constructor.py
 test.py
+cmtmsg.md
 # ^^^ -added & named by me.
 
 # Byte-compiled / optimized / DLL files

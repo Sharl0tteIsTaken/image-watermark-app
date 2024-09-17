@@ -9,6 +9,8 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from typing import Literal
 from typing_extensions import TypeAlias
+# TODO: check import orders
+
 
 # default key dimensions
 window_width = 1400
@@ -23,21 +25,7 @@ mark_width = 50
 mark_height = 50
 
 text_watermark_max_size = (2000, 2000)
-
-default_font_fmt = ("Arial", 16, "normal")
-default_font = 'Arial'
-style = ['Regular', 'Narrow Bold Italic', 'Bold', 'Narrow Bold', 'Narrow Italic', 'Narrow', 'Bold Italic', 'Black', 'Italic'] 
-default_style = sorted(style)
-
-_state: TypeAlias = Literal["image", "text"]
-_color: TypeAlias = Literal["mark bg", "text", "canvas"]
-_img: TypeAlias = Literal["image", "mark", "text", "icon"]
-_loc: TypeAlias = Literal["image", "canvas"]
-_rstable: TypeAlias = Literal["rotate", "scale", "opaque", "grid", "advset"]
-_dft_key: TypeAlias = Literal["attr_name", "default_val"] # dft_key: default_key
-_ckbtn_switch: TypeAlias = Literal["format", "rename"]
-
-grey = (128, 128, 128)
+gray = (128, 128, 128)
 
 # border and offsets by eyeballing it
 default_border_w = 7
@@ -45,23 +33,37 @@ default_border_h = 5
 default_offset_w = 3
 default_offset_h = -3
 
-# TODO: make sure all docstring is updated, and if event have type
-# TODO: add tooltip to everywhere nessary, and add checkbutton to turn off tooltip
+# default font related stuff
+default_font_fmt = ("Arial", 16, "normal")
+default_font = 'Arial'
+style = ['Regular', 'Narrow Bold Italic', 'Bold', 'Narrow Bold', 'Narrow Italic', 'Narrow', 'Bold Italic', 'Black', 'Italic'] 
+default_style = sorted(style)
 
-watermark_fp = "custom_watermark.png" # TODO: [later] get these a location to stay
-grid_fp = "watermark_grid.png"
+# file related stuff
+file_type = ((".png", "*.png"), (".jpg", "*.jpg"), (".jpeg", "*.jpeg"))
+
+_state: TypeAlias = Literal["image", "text"]
+_color: TypeAlias = Literal["mark bg", "text", "canvas"]
+_img: TypeAlias = Literal["image", "mark", "text", "icon"]
+_loc: TypeAlias = Literal["image", "canvas"]
+_rstable: TypeAlias = Literal["rotate", "scale", "opaque", "grid", "advset"]
+_dft_key: TypeAlias = Literal["attr_name", "default_val"] # dft_key = default_key
+_ckbtn_switch: TypeAlias = Literal["format", "rename"]
+_msgbx: TypeAlias = Literal["btnf_image_mode", "btnf_save", "btnf_apply", "apply_to_folder"]
+
+# TODO: make sure all docstring is updated, and if event have type
 
 class WaterMarker():
     """
     watermark picture with a image or text, watermark can be scaled proportionally,
     if watermark is placed at the border of the picture, it's snapped to that position,
     change of scale, font, fontsize or text won't effect the position.
-    ---
     use .operate() to boot everything:
     
-    `wm = WaterMarker()`
-    
-    `wm.operate()`
+    Example:
+     >>> wm = WaterMarker()
+     >>> wm.operate()
+     
     """
     def __init__(self) -> None:
         self.window = tk.Tk()
@@ -71,6 +73,7 @@ class WaterMarker():
         # self.window.resizable(width=False, height=False)
         
         self.validator_spnbx = (self.window.register(self.spnbx_val_validate), "%P")
+        self.tip = sf.TipManager()
         
         self.setup_option()
         self.setup_attribute()
@@ -80,8 +83,10 @@ class WaterMarker():
         self.load_defaults()
         self.setup_rstble()
         
-        self.window.wait_visibility()
+        self.window.update()
+        
         self.awake_custom()
+        self.tip.enable_all()
         
         
     def setup_option(self) -> None:
@@ -112,8 +117,8 @@ class WaterMarker():
         self.filepath_image:str = 'assets/img/default_image.png'
         self.filepath_mark:str|None = None
         
-        self.mark_bg = grey
-        self.canvas_bg = "grey"
+        self.mark_bg = gray
+        self.canvas_bg = "gray"
         self.current_font_hexcolor = "black"
         self.current_font_rgb:tuple[int,int,int] = (0, 0, 0)
         
@@ -181,8 +186,10 @@ class WaterMarker():
         self.ckbtnvr_snap = tk.BooleanVar()
         self.ckbtnvr_show_cnvs_bg = tk.BooleanVar()
         self.ckbtnvr_show_mark_bg = tk.BooleanVar()
+        self.ckbtnvr_wrng_mark_bg = tk.BooleanVar(value=True)
         self.ckbtnvr_fname_fmt = tk.BooleanVar(value=True)
         self.ckbtnvr_fname_rename = tk.BooleanVar()
+        self.ckbtnvr_tooltip = tk.BooleanVar(value=True)
         
         # other icons
         self.guicon_files = ImageTk.PhotoImage(Image.open("assets/img/files.png"))
@@ -250,6 +257,10 @@ class WaterMarker():
         # block open
         self.btn_open_image = tk.Button(self.block_open, text="image", command=self.btnf_load_image_path)
         self.btn_open_image.grid(column=0, row=0, rowspan=2, padx=2, pady=2)
+        self.tip.add_to_queue(
+            self.btn_open_image, 
+            text="open and select a image file to add watermark.", 
+        )
         
         self.btn_open_images = tk.Button(
             self.block_open, 
@@ -257,6 +268,10 @@ class WaterMarker():
             command=self.btnf_load_images_path
             )
         self.btn_open_images.grid(column=1, row=0, padx=2, pady=0)
+        self.tip.add_to_queue(
+            self.btn_open_images, 
+            text="open and select multiple image files to add watermark.", 
+        )
         
         self.btn_open_folder = tk.Button(
             self.block_open, 
@@ -264,9 +279,17 @@ class WaterMarker():
             command=self.btnf_load_folder_path
             )
         self.btn_open_folder.grid(column=1, row=1, padx=2, pady=0)
+        self.tip.add_to_queue(
+            self.btn_open_folder, 
+            text='open and select a folder to add watermark.\naccepts "png", "jpg", "jpeg" files.', 
+        )
         
         self.btn_open_mark = tk.Button(self.block_open, text="watermark", command=self.btnf_load_mark_path)
         self.btn_open_mark.grid(column=2, row=0, rowspan=2, padx=2, pady=2)
+        self.tip.add_to_queue(
+            self.btn_open_mark, 
+            text='open and select a image file to be watermark.', 
+        )
         
         # block canvas label
         self.lbl_canvas = tk.Label(
@@ -275,6 +298,10 @@ class WaterMarker():
             bg="white", borderwidth=0
             )
         self.lbl_canvas.pack()
+        self.tip.add_to_queue(
+            self.btn_open_mark, 
+            text='open and select a image file to be watermark.', 
+        )
         
         # block clear
         self.btn_clear_preview = tk.Button(
@@ -282,46 +309,65 @@ class WaterMarker():
             command= lambda: self.remove_exist_watermark(method='motion')
             )
         self.btn_clear_preview.grid(column=2, row=0, padx=2, pady=2)
+        self.tip.add_to_queue(
+            self.btn_clear_preview, 
+            text='remove preview watermark in canvas.', 
+        )
         
         self.btn_clear_mark = tk.Button(
             self.block_clear, text="watermark", 
             command= lambda: self.remove_exist_watermark(method='clicked')
             )
         self.btn_clear_mark.grid(column=3, row=0, padx=2, pady=2)
+        self.tip.add_to_queue(
+            self.btn_clear_mark, 
+            text='remove watermark in canvas.', 
+        )
         
         # block image
         self.canvas = tk.Canvas(self.block_canvas, bg='white', width=canvas_width, height=canvas_height)
         self.canvas.pack()
         
         # block canvas control
+        self.ckbtnbrdr_preview = tk.Frame(self.block_cnvs_ctrl, bg="light gray") # ckbtnbrdr: checkbuttonborder
         self.ckbtn_preview = tk.Checkbutton(
-            self.block_cnvs_ctrl, 
+            self.ckbtnbrdr_preview, 
             text="show watermark preview", 
             variable=self.ckbtnvr_show_preview,
             command=self.update_canvas_bind,  
             bg='white', 
             )
         self.ckbtn_preview.select()
-        self.ckbtn_preview.grid(column=0, row=0)
+        self.ckbtn_preview.pack(padx=1, pady=1)
+        self.ckbtnbrdr_preview.grid(column=0, row=0)
         
+        self.ckbtnbrdr_snap = tk.Frame(self.block_cnvs_ctrl, bg="light gray")
         self.ckbtn_snap = tk.Checkbutton(
-            self.block_cnvs_ctrl, 
+            self.ckbtnbrdr_snap, 
             text="snap watermark to border", 
             variable=self.ckbtnvr_snap,
             bg='white', 
             )
         self.ckbtn_snap.select()
-        self.ckbtn_snap.grid(column=1, row=0)
+        self.ckbtn_snap.pack(padx=1, pady=1)
+        self.ckbtnbrdr_snap.grid(column=1, row=0)
+        self.tip.add_to_queue(
+            self.ckbtn_snap, 
+            text='enable/disable restrict watermark to stay inside image.', 
+            side="tr", 
+        )
         
+        self.ckbtnbrdr_canvasbg = tk.Frame(self.block_cnvs_ctrl, bg="light gray")
         self.ckbtn_canvasbg = tk.Checkbutton(
-            self.block_cnvs_ctrl, 
+            self.ckbtnbrdr_canvasbg, 
             text="show canvas background", 
             variable=self.ckbtnvr_show_cnvs_bg,
             command=self.update_canvas_bg,
             bg='white', 
             )
         self.ckbtn_canvasbg.deselect()
-        self.ckbtn_canvasbg.grid(column=2, row=0)
+        self.ckbtn_canvasbg.pack(padx=1, pady=1)
+        self.ckbtnbrdr_canvasbg.grid(column=2, row=0)
         
         self.btn_cnvsbg_color = tk.Button(
             self.block_cnvs_ctrl, 
@@ -330,13 +376,26 @@ class WaterMarker():
             command=lambda: self.choose_color(tg="canvas"), 
             )
         self.btn_cnvsbg_color.grid(column=3, row=0)
+        self.tip.add_to_queue(
+            self.btn_cnvsbg_color, 
+            text='select color of canvas background,\nuses light gray if canceled.', 
+            side="tr", 
+        )
         
         # block switch
         self.btn_switch_image = tk.Button(self.block_switch, text="image", command=self.btnf_image_mode)
         self.btn_switch_image.grid(column=0, row=0, padx=2, pady=2)
+        self.tip.add_to_queue(
+            self.btn_switch_image, 
+            text='switch to use image as watermark.', 
+        )
         
         self.btn_switch_text = tk.Button(self.block_switch, text="text", command=self.btnf_text_mode)
         self.btn_switch_text.grid(column=1, row=0, padx=2, pady=2)
+        self.tip.add_to_queue(
+            self.btn_switch_text, 
+            text='switch to use text as watermark.', 
+        )
         
         # block save
         self.btn_save = tk.Button(self.block_save, text='save', command=self.btnf_save)
@@ -344,6 +403,11 @@ class WaterMarker():
         
         self.btn_apply = tk.Button(self.block_save, text='apply', command=self.btnf_apply)
         self.btn_apply.grid(column=1, row=0, padx=2, pady=2)
+        self.tip.add_to_queue(
+            self.btn_apply, 
+            text='add watermark to all files selected,\nwatermark will be placed at relatively the same location.', 
+            side="bl"
+        )
         
         # block text
         row = 0
@@ -421,12 +485,21 @@ class WaterMarker():
             command=lambda: self.choose_color(tg="text"), 
             )
         self.btn_color.grid(column=1, row=row, padx=(0, 30), pady=(2, 0), sticky='e')
+        self.tip.add_to_queue(
+            self.btn_color, 
+            text='select font color of text,\nuses light gray if canceled.', 
+            side="bl"
+        )
         
         # block panel
         row = 0
         self.lbl_rotate = tk.Label(self.block_panel, text="rotate", bg='white')
         self.lbl_rotate.grid(column=0, row=row, padx=5, sticky='e')
-
+        self.tip.add_to_queue(
+            self.lbl_rotate, 
+            text='rotate the watermark,\nworks with mode text and image.', 
+        )
+        
         self.spnbx_rotate = tk.Spinbox(
             self.block_panel, 
             from_=0, to=360, 
@@ -446,12 +519,21 @@ class WaterMarker():
             bg="white"
             )
         self.btnrst_rotate.grid(column=2, row=row)
+        self.tip.add_to_queue(
+            self.btnrst_rotate, 
+            text="resets the value of rotate.", 
+        )
         
         self.lbl_scale = tk.Label(self.block_panel, text="scale", bg='white')
         self.lbl_scale.grid(column=3, row=row, padx=(32, 0))
+        self.tip.add_to_queue(
+            self.lbl_scale, 
+            text="scales the watermark, may cause blurry watermark,\npixels of misplacement or size difference.", 
+            side="bl", 
+        )
 
         self.tick_scale = tk.IntVar(value=0)
-        self.scale_scale = sf.CustomScale( # TODO: [later] add tooltip: may cause text watermark to blurr; may cause pixels of misplace & size difference
+        self.scale_scale = sf.CustomScale(
             self.block_panel, 
             from_=-90, to=90, 
             tickinterval=0.1, 
@@ -465,18 +547,27 @@ class WaterMarker():
         self.scale_scale.bind("<Button-1>", self.scale_scale.command)
         self.scale_scale.grid(column=4, row=row, padx=4, sticky='e')
         
-        self.btnrst_scale = tk.Button( # TODO: [later] add tooltip: reset button of _ function
+        self.btnrst_scale = tk.Button(
             self.block_panel, 
             image=self.guicon_reset, # type: ignore
             command=lambda: self.reset_usrntr(func="scale"), 
             bg="white"
             )
         self.btnrst_scale.grid(column=5, row=row, padx=(0, 5))
+        self.tip.add_to_queue(
+            self.btnrst_scale, 
+            text="resets the value of scale.", 
+            side="bl"
+            )
         
         row = 1
         self.lbl_opaque = tk.Label(self.block_panel, text="opaque", bg='white')
         self.lbl_opaque.grid(column=0, row=row, padx=0)
- 
+        self.tip.add_to_queue(
+            self.lbl_opaque, 
+            text="set the opaqueness of watermark.", 
+        )
+        
         self.scale_opaque = tk.Scale(
             self.block_panel, 
             from_=0, to=100, 
@@ -494,16 +585,27 @@ class WaterMarker():
             bg="white"
             )
         self.btnrst_opaque.grid(column=2, row=row)
+        self.tip.add_to_queue(
+            self.btnrst_opaque, 
+            text="resets the value of opaque.", 
+            )
         
+        self.ckbtnbrdr_grid = tk.Frame(self.block_panel, bg="light gray")
         self.ckbtn_grid = tk.Checkbutton(
-            self.block_panel, 
+            self.ckbtnbrdr_grid, 
             text="grid", 
             variable=self.ckbtnvr_grid, 
             command=self.update_userequest, 
             bg='white'
             )
-        self.ckbtn_grid.grid(column=3, row=row, padx=0, sticky='e')
-
+        self.ckbtn_grid.grid(padx=1, pady=1)
+        self.ckbtnbrdr_grid.grid(column=3, row=row, padx=0, sticky='e')
+        self.tip.add_to_queue(
+            self.ckbtn_grid, 
+            text="enable/disable grid function.", 
+            side="bl", 
+        )
+        
         self.tick_grid = tk.IntVar(value=0)
         self.scale_grid = sf.CustomScale(
             self.block_panel, 
@@ -526,16 +628,25 @@ class WaterMarker():
             command=lambda: self.reset_usrntr(func="grid"), 
             bg="white")
         self.btnrst_grid.grid(column=5, row=row, padx=(0, 5))
+        self.tip.add_to_queue(
+            self.btnrst_grid, 
+            text="resets the value of grid.", 
+            side="bl", 
+            )
         
         # block preview
         self.lbl_watermark_preview = tk.Label(self.block_preview, bg='white')
         self.lbl_watermark_preview.grid(column=0, row=0)
+        self.tip.add_to_queue(
+            self.lbl_watermark_preview, 
+            text="preview of watermark,\nif text watermark got croped by border,\ngo to advanced settings in bottom right corner.", 
+            side="bl", 
+            )
         
         self.btn_advset = tk.Button(self.block_advset, text='advanced settings', width=17, command=self.btnf_advset)
         self.btn_advset.grid(column=2, row=0, padx=(249, 0), sticky="w")
     
     def load_defaults(self):
-        # TODO: [later] move to load_asset() load asset for UI
         self.default_image_example = self.proper_load(
             filepath='assets/img/advanced_settings_example.png', 
             type_='image', 
@@ -553,7 +664,6 @@ class WaterMarker():
         self.tplvl_save = tk.Toplevel(bg="white", padx=20, pady=5)
         self.setup_savefmt()
         self.tplvl_save.withdraw()
-
     
     def setup_rstble(self) -> None:
         self.rstble_vals: ( # rstble = resetable
@@ -632,37 +742,64 @@ class WaterMarker():
             x = relative_x + scale_w - lbl_w
             y = relative_y - lbl_h + offset
             
-            widget.lbl.place(x=x, y=y,)
+            widget.lbl.place(x=x, y=y)
     
     def setup_advset(self) -> None:
         
         row = 0
+        self.ckbtnbrdr_mark_bg = tk.Frame(self.tplvl_advset, bg="light gray")
         self.ckbtn_mark_bg = tk.Checkbutton(
-            self.tplvl_advset, 
+            self.ckbtnbrdr_mark_bg, 
             text="show watermark background", 
             variable=self.ckbtnvr_show_mark_bg,
-            command=self.text_mark_maker, 
+            command=lambda: (self.show_hidden_widget(), self.text_mark_maker()), 
             bg='white', 
             )
-        self.ckbtn_mark_bg.grid(column=0, row=row, padx=(0, 15), sticky='w')
+        self.ckbtn_mark_bg.grid(padx=1, pady=1)
+        self.ckbtnbrdr_mark_bg.grid(column=0, row=row, padx=(0, 15), sticky='w')
         
         self.btn_cnvsbg_color = tk.Button(
             self.tplvl_advset, text="color", 
             command=lambda: self.choose_color(tg="mark bg")
             )
         self.btn_cnvsbg_color.grid(column=1, row=row)
+        self.tip.add_to_queue(
+            self.btn_cnvsbg_color, 
+            text='select color of background of watermark,\nuses light gray if canceled.', 
+            side="bl"
+        )
         
         row = 1
+        self.ckbtnbrdr_wrng_mark_bg = tk.Frame(self.tplvl_advset, bg="light gray")
+        self.ckbtn_wrng_mark_bg = tk.Checkbutton(
+            self.ckbtnbrdr_wrng_mark_bg, 
+            text="warning when watermark contains background", 
+            variable=self.ckbtnvr_wrng_mark_bg, 
+            bg='white', 
+        )
+        self.ckbtn_wrng_mark_bg.pack(padx=1, pady=1)
+        self.tip.add_to_queue(
+            self.ckbtn_wrng_mark_bg, 
+            text='enable/disable the warning window.', 
+            side="b"
+        )
+        
+        row = 2
         self.sprtr_watermark_bg = ttk.Separator(self.tplvl_advset, orient='horizontal')
         self.sprtr_watermark_bg.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
         
-        row = 2
+        row = 3
         self.lbl_border_w = tk.Label(
             self.tplvl_advset, 
             text="adjust watermark width", 
             bg='white'
             )
         self.lbl_border_w.grid(column=0, row=row, padx=(2, 0), sticky='w')
+        self.tip.add_to_queue(
+            self.lbl_border_w, 
+            text='adjust total width of watermark,\nthe width gray box shown below.', 
+            side="b"
+        )
         
         self.spnbx_mark_w = sf.CustomSpinbox(
             self.tplvl_advset, 
@@ -675,14 +812,19 @@ class WaterMarker():
             )
         self.spnbx_mark_w.bind("<KeyRelease>", self.spnbx_mark_w.command)
         self.spnbx_mark_w.grid(column=1, row=row, sticky='e')
-
-        row = 3
+        
+        row = 4
         self.lbl_border_h = tk.Label(
             self.tplvl_advset, 
             text="adjust watermark height", 
             bg='white'
             )
         self.lbl_border_h.grid(column=0, row=row, padx=(2, 0), sticky='w')
+        self.tip.add_to_queue(
+            self.lbl_border_h, 
+            text='adjust total height of watermark,\nthe height gray box shown below.', 
+            side="b"
+        )
         
         self.spnbx_mark_h = sf.CustomSpinbox(
             self.tplvl_advset, 
@@ -696,13 +838,18 @@ class WaterMarker():
         self.spnbx_mark_h.bind("<KeyRelease>", self.spnbx_mark_h.command)
         self.spnbx_mark_h.grid(column=1, row=row, sticky='e')
         
-        row = 4
+        row = 5
         self.lbl_offset_h = tk.Label(
             self.tplvl_advset, 
             text="adjust text position horizontally(Δh)", 
             bg='white'
             )
         self.lbl_offset_h.grid(column=0, row=row, padx=(2, 0), sticky='w')
+        self.tip.add_to_queue(
+            self.lbl_offset_h, 
+            text='adjust text position in watermark,\nthe blue text in gray box, stands for\ncurrent text position in watermark.\nincrease makes text move right,\nvice versa.', 
+            side="b"
+        )
         
         self.spnbx_offset_h = sf.CustomSpinbox(
             self.tplvl_advset, 
@@ -716,13 +863,18 @@ class WaterMarker():
         self.spnbx_offset_h.bind("<KeyRelease>", self.spnbx_offset_h.command)
         self.spnbx_offset_h.grid(column=1, row=row, sticky='e')
         
-        row = 5
+        row = 6
         self.lbl_offset_v = tk.Label(
             self.tplvl_advset, 
             text="adjust text position vertically(Δv)", 
             bg='white'
             )
         self.lbl_offset_v.grid(column=0, row=row, padx=(2, 0), sticky='w')
+        self.tip.add_to_queue(
+            self.lbl_offset_v, 
+            text='adjust text position in watermark,\nthe blue text in gray box, stands for\ncurrent text position in watermark.\nincrease to move text downward,\nvice versa.', 
+            side="b"
+        )
         
         self.spnbx_offset_v = sf.CustomSpinbox(
             self.tplvl_advset, 
@@ -736,13 +888,18 @@ class WaterMarker():
         self.spnbx_offset_v.bind("<KeyRelease>", self.spnbx_offset_v.command)
         self.spnbx_offset_v.grid(column=1, row=row, sticky='e')
         
-        row = 6
+        row = 7
         self.lbl_shift_h = tk.Label(
             self.tplvl_advset, 
             text="adjust watermark position horizontally", 
             bg='white'
             )
         self.lbl_shift_h.grid(column=0, row=row, padx=(2, 0), sticky='w')
+        self.tip.add_to_queue(
+            self.lbl_shift_h, 
+            text='adjust watermark in output image,\nbecause load image to canvas\nmay cause pixels of deviation.\nincrease makes watermark move right,\nvice versa.', 
+            side="b"
+        )
         
         self.spnbx_shift_h = sf.CustomSpinbox(
             self.tplvl_advset, 
@@ -756,13 +913,18 @@ class WaterMarker():
         self.spnbx_shift_h.bind("<KeyRelease>", self.spnbx_shift_h.command)
         self.spnbx_shift_h.grid(column=1, row=row, sticky='e')
         
-        row = 7
+        row = 8
         self.lbl_shift_v = tk.Label(
             self.tplvl_advset, 
             text="adjust watermark position vertically", 
             bg='white'
             )
         self.lbl_shift_v.grid(column=0, row=row, padx=(2, 0), sticky='w')
+        self.tip.add_to_queue(
+            self.lbl_shift_v, 
+            text='adjust watermark in output image,\nbecause load image to canvas\nmay cause pixels of deviation.\nincrease to move watermark downward,\nvice versa.', 
+            side="b"
+        )
         
         self.spnbx_shift_v = sf.CustomSpinbox(
             self.tplvl_advset, 
@@ -776,31 +938,7 @@ class WaterMarker():
         self.spnbx_shift_v.bind("<KeyRelease>", self.spnbx_shift_v.command)
         self.spnbx_shift_v.grid(column=1, row=row, sticky='e')
         
-        row = 8
-        self.sprtr_adjust = ttk.Separator(self.tplvl_advset, orient='horizontal')
-        self.sprtr_adjust.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
-        
         row = 9
-        self.lbl_example = tk.Label(
-            self.tplvl_advset, 
-            text="example diagram:", 
-            bg="white"
-            )
-        self.lbl_example.grid(column=0, row=row, sticky="w")
-        
-        row = 10
-        self.lbl_example_image = tk.Label(
-            self.tplvl_advset, 
-            image=self.default_image_example,  # type: ignore
-            bg="white", 
-            )
-        self.lbl_example_image.grid(column=0, row=row, columnspan=3)
-        
-        row = 11
-        self.sprtr_diagram = ttk.Separator(self.tplvl_advset, orient='horizontal')
-        self.sprtr_diagram.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
-        
-        row = 12
         self.btnrst_advset = tk.Button(
             self.tplvl_advset,
             text="Reset All", 
@@ -808,7 +946,55 @@ class WaterMarker():
             compound= tk.LEFT, 
             command=lambda: self.reset_usrntr(func="advset"), 
             )
-        self.btnrst_advset.grid(column=0, row=row, sticky="w")
+        self.btnrst_advset.grid(column=1, row=row, pady=(3, 0), sticky="e")
+        self.tip.add_to_queue(
+            self.btnrst_advset, 
+            text='reset all adjustments.', 
+            side="bl"
+        )
+        
+        row = 10
+        self.sprtr_adjust = ttk.Separator(self.tplvl_advset, orient='horizontal')
+        self.sprtr_adjust.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
+        
+        row = 11
+        self.lbl_example = tk.Label(
+            self.tplvl_advset, 
+            text="example diagram:", 
+            bg="white"
+            )
+        self.lbl_example.grid(column=0, row=row, sticky="w")
+        
+        row = 12
+        self.lbl_example_image = tk.Label(
+            self.tplvl_advset, 
+            image=self.default_image_example,  # type: ignore
+            bg="white", 
+            )
+        self.lbl_example_image.grid(column=0, row=row, columnspan=3)
+        
+        row = 13
+        self.sprtr_diagram = ttk.Separator(self.tplvl_advset, orient='horizontal')
+        self.sprtr_diagram.grid(column=0, row=row, columnspan=2, pady=(3, 5), sticky="we")
+        
+        row = 14
+        self.ckbtnbrdr_tooltip = tk.Frame(self.tplvl_advset, bg="light gray")
+        self.ckbtn_tooltip = tk.Checkbutton(
+            self.ckbtnbrdr_tooltip, 
+            text="show tooltip", 
+            variable=self.ckbtnvr_tooltip, 
+            command=self.btnf_ckbtn_tooltip, 
+            bg="white", 
+            fg="black",
+            highlightthickness=2,
+        )
+        self.ckbtn_tooltip.pack(padx=1, pady=1)
+        self.ckbtnbrdr_tooltip.grid(column=0, row=row, sticky="w")
+        self.tip.add_to_queue(
+            self.ckbtn_tooltip, 
+            text="enable/disable tooltip,\nthe text you currently looking at.", 
+            side="t"
+        )
         
         self.btn_hide_tplvl = tk.Button(
             self.tplvl_advset, 
@@ -826,6 +1012,10 @@ class WaterMarker():
             command=self.btnf_savedir, 
             )
         self.btn_savedir.grid(column=0, row=row, padx=(0, 10), sticky='w')
+        self.tip.add_to_queue(
+            self.btn_savedir, 
+            text="select a directory to save watermarked images.", 
+        )
         
         self.lbl_savedir = tk.Label(
             self.tplvl_save, 
@@ -833,16 +1023,27 @@ class WaterMarker():
             fg="red", 
         )
         self.lbl_savedir.grid(column=1, row=row, columnspan=2, sticky='w')
+        self.tip.add_to_queue(
+            self.lbl_savedir, 
+            text="specified directory to save watermarked images.", 
+            side="b", 
+        )
         
         row = 1
+        self.ckbtnbrdr_fname_fmt = tk.Frame(self.tplvl_save, bg="light gray")
         self.ckbtn_fname_fmt = tk.Checkbutton(
-            self.tplvl_save, 
-            text="format", # TODO: [later] add tooltip: add text in the before or after original file name
+            self.ckbtnbrdr_fname_fmt, 
+            text="format", 
             variable=self.ckbtnvr_fname_fmt, 
             command=lambda: self.btnf_ckbtn_switch(method="format"), 
             bg="white", 
         )
-        self.ckbtn_fname_fmt.grid(column=0, row=row, sticky='w')
+        self.ckbtn_fname_fmt.pack(padx=1, pady=1)
+        self.ckbtnbrdr_fname_fmt.grid(column=0, row=row, sticky='w')
+        self.tip.add_to_queue(
+            self.ckbtn_fname_fmt, 
+            text="add text before and/or after original\nfile name as the save name.", 
+        )
         
         self.entry_prefix = tk.Entry(
             self.tplvl_save, 
@@ -883,14 +1084,20 @@ class WaterMarker():
         self.btn_clear_entry_suffix.grid(column=1, row=row, padx=(132+px, 0), sticky='w')
         
         row = 2
+        self.ckbtnbrdr_fname_rename = tk.Frame(self.tplvl_save, bg="light gray")
         self.ckbtn_fname_rename = tk.Checkbutton(
-            self.tplvl_save, 
+            self.ckbtnbrdr_fname_rename, 
             text="rename", 
             variable=self.ckbtnvr_fname_rename, 
             command=lambda: self.btnf_ckbtn_switch(method="rename"), 
             bg="white", 
         )
-        self.ckbtn_fname_rename.grid(column=0, row=row, sticky='w')
+        self.ckbtn_fname_rename.pack(padx=1, pady=1)
+        self.ckbtnbrdr_fname_rename.grid(column=0, row=row, sticky='w')
+        self.tip.add_to_queue(
+            self.ckbtn_fname_rename, 
+            text="rename file name as the save name,\noutput names will be Name-1, Name-2... etc."
+        )
         
         self.entry_rename = tk.Entry(
             self.tplvl_save, 
@@ -937,6 +1144,10 @@ class WaterMarker():
             bg="white", 
         )
         self.lbl_example_fname.grid(column=0, row=row, sticky='w')
+        self.tip.add_to_queue(
+            self.lbl_example_fname, 
+            text="preview of file name under current\nnaming scheme, with first file as example."
+        )
         
         self.lbl_outcome_fname = tk.Label(
             self.tplvl_save, 
@@ -945,12 +1156,16 @@ class WaterMarker():
         self.lbl_outcome_fname.grid(column=1, row=row, pady=7, columnspan=3, sticky='w')
         
         row = 5
-        self.btn_aply_savefmt = tk.Button(
+        self.btn_apply_savefmt = tk.Button(
             self.tplvl_save, 
             text="execute", 
             command=self.apply_to_folder, 
         )
-        self.btn_aply_savefmt.grid(column=1, row=row)
+        self.btn_apply_savefmt.grid(column=1, row=row)
+        self.tip.add_to_queue(
+            self.btn_apply_savefmt, 
+            text="add watermark to all images selected,\nsave images by naming scheme above."
+        )
         
     # GUI functions
     def btnf_load_image_path(self):
@@ -959,15 +1174,16 @@ class WaterMarker():
         if self.filepath_image == "":
             return None
         self.load_image()
-        
         # additional thought:
-        # add load image mode RGB, RGBA
-        # cite in proper_load(), 使用下拉式選單, 選單event綁定重新load image
-        
+        # add load image mode RGB, RGBA ... cite: https://pillow.readthedocs.io/en/stable/handbook/concepts.html#concept-modes
+        # use combobox bind with `<<ComboboxSelected>>`, command set `self.load_image()`, 
+        # reload the image when selected, if image have conflict with RGBA mode, 
+        # user can change the mode manually, but `self.save_image` uses Image.alpha_composite(), 
+        # which specifically requires Image mode=RGBA, also yet no precedent so postponed.
         
     def btnf_load_images_path(self):
         self.apply_paths = []
-        filepaths = filedialog.askopenfilenames()
+        filepaths = filedialog.askopenfilenames(filetypes=file_type)
         if filepaths == "":
             return None
         for filepath in filepaths:
@@ -982,8 +1198,9 @@ class WaterMarker():
             return None
         for path, dirs, fnames in os.walk(folder):
             for fname in fnames:
-                filepath = os.path.join(path, fname).replace("\\", "/")
-                self.apply_paths.append(filepath)
+                if any(map(fname.endswith, [".png", ".jpg", ".jpeg"])):
+                    filepath = os.path.join(path, fname).replace("\\", "/")
+                    self.apply_paths.append(filepath)
         self.filepath_image = self.apply_paths[0]
         self.load_image()
         
@@ -996,10 +1213,7 @@ class WaterMarker():
     
     def btnf_image_mode(self) -> None:
         self.switch_state = 'image'
-        if self.filepath_mark is None:
-            self.btn_switch_text.config(relief='sunken')
-            messagebox.showwarning(title="Missing something", message="open a image file for watermark first!")
-        else:
+        if self.condition_met(func_="btnf_image_mode"):
             self.load_mark()
         
     def btnf_text_mode(self) -> None:
@@ -1022,21 +1236,8 @@ class WaterMarker():
             self.setup_advset()
         
     def btnf_save(self) -> None:
-        if self.filepath_image == 'assets/img/default_image.png':
-            messagebox.askyesno(
-                title="Too early. Load a image first!", 
-                message="load a image and place watermark on the image then click the save button.", 
-                )
+        if not self.condition_met(func_="btnf_save"):
             return None
-        if self.ckbtnvr_show_mark_bg.get() and self.switch_state == "text": # TODO: add checkbutton in adv-settings to turn-off this msgbox
-            save = messagebox.askyesno(
-                title="Wait a second.", 
-                message="the background of watermark preview will also appear in the result image, still want to save the image?", 
-                )
-            if not save:
-                return None
-        
-        file_type = ((".png", "*.png"), (".jpg", "*.jpg"), (".jpeg", "*.jpeg"))
         
         dir_, fname = self.filepath_image.rsplit("/", maxsplit=1)
         name, type_ = fname.rsplit(".", maxsplit=1)
@@ -1047,38 +1248,27 @@ class WaterMarker():
             initialdir=dir_ , 
             initialfile=fname , 
         )
+        
         if path == "":
             return None
         self.save_image(abs_path=path)
         
-        # load the next image if there's 
+        # load the next image if there's any
         if len(self.apply_paths) > 1:
             self.apply_paths.remove(self.filepath_image)
             self.filepath_image = self.apply_paths[0]
         elif len(self.apply_paths) == 1:
             self.apply_paths.remove(self.filepath_image)
-            self.filepath_image = self.apply_paths[0]
-
+        if len(self.apply_paths) < 1:
+            self.filepath_image = 'assets/img/default_image.png'
+            self.is_image = False
+            
+        self.load_image()
+        self.update_canvas_bind()
+        
     def btnf_apply(self) -> None:
-        # TODO: move every messagebox to a func
-        if self.filepath_image == 'assets/img/default_image.png':
-            messagebox.showwarning(
-                title="Too early. Load a image first!", 
-                message="load a image and place watermark on the image, then click the apply button.", 
-                )
+        if not self.condition_met(func_="btnf_apply"):
             return None
-        elif self.clicked == False:
-            messagebox.showwarning(
-                title="Too early. Place watermark first!", 
-                message="place watermark on the image, then click the apply button.", 
-                )
-            return None
-        elif self.apply_paths == []:
-            messagebox.showwarning(
-                title="Too early. Open and select a folder first!", 
-                message="select a folder of image to apply watermark, then click the apply button.", 
-                )
-            return
         
         if self.tplvl_save.winfo_exists():
             self.tplvl_save.deiconify()
@@ -1095,6 +1285,12 @@ class WaterMarker():
         self.lbl_savedir.config(fg="black")
         self.tplvl_save.deiconify()
     
+    def btnf_ckbtn_tooltip(self) -> None:
+        if self.ckbtnvr_tooltip.get():
+            self.tip.enable_all()
+        else:
+            self.tip.disable_all()
+        
     def btnf_ckbtn_switch(self, method:_ckbtn_switch) -> None:
         if method == "format":
             self.ckbtn_fname_fmt.select()
@@ -1104,7 +1300,6 @@ class WaterMarker():
             self.ckbtn_fname_rename.select()
         self.fmt_selected()
         
-    
     def reset_usrntr(self, func:_rstable) -> None:
         if func == "advset":
             for idx, value in enumerate(self.rstble_vals[func]["attr_name"]): # type: ignore
@@ -1165,7 +1360,12 @@ class WaterMarker():
         fmt = self.cmbbx_filefmt.get()
         return fname + fmt
         
-    
+    def show_hidden_widget(self) -> None:
+        if self.ckbtnvr_show_mark_bg.get():
+            self.ckbtnbrdr_wrng_mark_bg.grid(column=0, row=1, columnspan=2)
+        else:
+            self.ckbtnbrdr_wrng_mark_bg.grid_forget()
+        
     # key functions
     def operate(self) -> None:
         """
@@ -1260,7 +1460,8 @@ class WaterMarker():
             alpha=alpha, 
             angle=angle, 
             )
-
+        
+        self.is_mark = True
         self.switch_state = "image"
         self.update_mark_offset()
         self.update_canvas_bind()
@@ -1469,9 +1670,9 @@ class WaterMarker():
         if self.ckbtnvr_snap.get() and self.snap_position:
             x, y = self.true_position
             if self.true_position[0] == self.image_pil.width:
-                x -= true_markpil_width
+                x -= true_markpil_width + self.usrntr_shift_h.get()
             if self.true_position[1] == self.image_pil.height:
-                y -= true_markpil_height
+                y -= true_markpil_height + self.usrntr_shift_v.get()
         else:
             true_x = self.true_position[0] - self.mark_offset_x_min - self.image_datum_x
             true_y = self.true_position[1] - self.mark_offset_y_min - self.image_datum_y
@@ -1543,12 +1744,8 @@ class WaterMarker():
         }
     
     def apply_to_folder(self, event=None):
-        if self.save_dir.get() == "file save directory missing.":
-            messagebox.showwarning(
-                title="Too early. Open and select a folder first!", 
-                message="select a folder to save watermarked image, then click the execute button.", 
-                )
-            return
+        if not self.condition_met(func_="apply_to_folder"):
+            return None
         
         save_dir = self.save_dir.get()
         for idx, path in enumerate(self.apply_paths):
@@ -1582,6 +1779,8 @@ class WaterMarker():
             self.canvas.focus_set()
             self.remove_exist_watermark(method="motion")
             self.remove_exist_watermark(method="clicked")
+        else:
+            self.canvas.unbind("<Button-1>")
         
     def update_mode(self) -> None:
         if self.switch_state == "text":
@@ -1625,7 +1824,6 @@ class WaterMarker():
         self.remove_exist_watermark(method="all")
     
     # support functions
-    
     def store_pil(self, pil:Image.Image, type_:_img) -> None:
         if type_ == 'image':
             self.image_pil = pil
@@ -1702,7 +1900,7 @@ class WaterMarker():
             if color_code[0] is not None:
                 self.mark_bg, _ = color_code
             else:
-                self.mark_bg = grey
+                self.mark_bg = gray
             self.text_mark_maker()
         elif tg == "canvas":
             if color_code[1] is not None:
@@ -1761,7 +1959,61 @@ class WaterMarker():
             return True
         except ValueError:
             return False
-       
+        
+    def condition_met(self, func_:_msgbx) -> bool:
+        if func_ == "btnf_image_mode":
+            if self.filepath_mark is None:
+                self.btn_switch_text.config(relief='sunken')
+                messagebox.showwarning(title="Missing something", message="click watermark button and select a image file first!")
+                return False
+        elif func_ == "btnf_save":
+            if self.filepath_image == 'assets/img/default_image.png':
+                messagebox.askyesno(
+                    title="Too early. Load a image first!", 
+                    message="load a image and place watermark on the image then click the save button.", 
+                    )
+                return False
+            elif self.clicked == False:
+                messagebox.showwarning(
+                    title="Too early. Place watermark first!", 
+                    message="place watermark on the image, then click the save button.", 
+                    )
+                return False
+            elif self.ckbtnvr_show_mark_bg.get() and self.switch_state == "text" and self.ckbtnvr_wrng_mark_bg.get():
+                save = messagebox.askyesno(
+                    title="Wait a second.", 
+                    message="the background of watermark preview will also appear in the result image, still want to save the image?", 
+                    )
+                if not save:
+                    return False
+        elif func_ == "btnf_apply":
+            if self.filepath_image == 'assets/img/default_image.png':
+                messagebox.showwarning(
+                    title="Too early. Load a image first!", 
+                    message="load a image and place watermark on the image, then click the apply button.", 
+                    )
+                return False
+            elif self.clicked == False:
+                messagebox.showwarning(
+                    title="Too early. Place watermark first!", 
+                    message="place watermark on the image, then click the apply button.", 
+                    )
+                return False
+            elif self.apply_paths == []:
+                messagebox.showwarning(
+                    title="Too early. Open and select a folder first!", 
+                    message="select a folder of image to apply watermark, then click the apply button.", 
+                    )
+                return False
+        elif func_ == "apply_to_folder":
+            if self.save_dir.get() == "file save directory missing.":
+                messagebox.showwarning(
+                    title="Too early. Open and select a folder first!", 
+                    message="select a folder to save watermarked image, then click the execute button.", 
+                    )
+                return False
+        return True
+
     def __prnt_style_without_regular_(self):
         font_dict = sf.get_sysfont_sorted()
         for name in font_dict:
@@ -1798,5 +2050,6 @@ class WaterMarker():
         width = round(math.ceil(math.cos(deg_b * (math.pi / 180)) * hyp * 2))
         height = round(math.ceil(math.sin(deg_d * (math.pi / 180)) * hyp * 2))
         return width, height
+    
 wm = WaterMarker()
 wm.operate()

@@ -7,52 +7,150 @@ from collections.abc import Callable
 from matplotlib import font_manager
 from PIL import ImageFont
 
-_callable:TypeAlias = Callable
+_callable: TypeAlias = Callable
+_side: TypeAlias = Literal["tl", "tr", "bl", "br", "t", "b"] # topleft, bottomright etc.
 
-class ToolTip(object):
-    """
-    cite: https://stackoverflow.com/questions/20399243/display-message-when-hovering-over-something-with-mouse-cursor-in-python/56749167#56749167
-    """
-    def __init__(self, widget:tk.Widget):
-        self.widget:tk.Widget = widget
-        self.tip_window:tk.Toplevel|None = None
-        self.id = None
-        self.x = self.y = 0
-
-    def showtip(self, text:str):
-        "Display text in tooltip window"
-        self.text:str = text
-        if self.tip_window or not self.text:
-            return
-        x = self.widget.winfo_rootx() + 60
-        y = self.widget.winfo_rooty() + 45
-        self.tip_window = tk.Toplevel(self.widget)
-        self.tip_window.config(borderwidth=1, background="black")
-        self.tip_window.wm_overrideredirect(True)
-        self.tip_window.wm_geometry(f"+{x}+{y}")
-        tk.Label(self.tip_window, text=self.text, background="light yellow").pack(side='left')
-
-    def hidetip(self):
-        exist_window = self.tip_window
-        self.tip_window = None
-        if exist_window:
-            exist_window.destroy()
-
-def add_tool_tip(widget:tk.Widget, text:str):
+class ToolTip():
     """
     add hover text to a widget in tkinter.
-
-    Args:
-        widget (tkinter.Widget): any widget in tkinter.
-        text (_type_): text displayed when mouse hovers.
+    a tooltip window with customizable text in tooltip window 
+    and specify which side of the original widget to display on.
+    this version isn't designed to be operating individually,
+    please call this class by TipManager().
+    
+    cite: https://stackoverflow.com/questions/20399243/display-message-when-hovering-over-something-with-mouse-cursor-in-python/56749167#56749167
     """
-    toolTip = ToolTip(widget)
-    def enter(event):
-        toolTip.showtip(text)
-    def leave(event):
-        toolTip.hidetip()
-    widget.bind('<Enter>', enter)
-    widget.bind('<Leave>', leave)
+    def __init__(self) -> None:
+        "create the first tooltip window."
+        self.createtip()
+        
+    def createtip(self) -> None:
+        "create tooltip window and label."
+        self.tip_window = tk.Toplevel()
+        self.tip_window.config(borderwidth=1, background="black")
+        self.tip_window.wm_overrideredirect(True)
+        self.tip_window.withdraw()
+        self.label = tk.Label(self.tip_window, font='Arial 16', background="light yellow")
+        self.label.pack()
+        
+    def configtip(self, widget:tk.Widget, text:str, side:_side) -> None:
+        """
+        configure widget on top of tooltip window.
+
+        Args:
+            widget (tk.Widget): the master of tooltip,
+            text (str): text on tooltip window.
+            side (_side): the side to show tooltip from the widget, 
+                          use `tl`, `tr`, `bl`, `br`, `t`, `b`; 
+                          `t` for top, `b` for bottom, `l` for left, `r` for right.
+        """
+        base_x, base_y = widget.winfo_rootx(), widget.winfo_rooty()
+        self.label.config(text=text)
+        if side == "br":
+            x = base_x + widget.winfo_reqwidth()
+            y = base_y + widget.winfo_reqheight()
+        elif side == "bl":
+            x = base_x - self.label.winfo_reqwidth()
+            y = base_y + widget.winfo_reqheight()
+        elif side == "tl":
+            x = base_x - self.label.winfo_reqwidth()
+            y = base_y - self.label.winfo_reqheight()
+        elif side == "tr":
+            x = base_x + widget.winfo_reqwidth()
+            y = base_y - self.label.winfo_reqheight()
+        elif side == "b":
+            x = base_x
+            y = base_y + widget.winfo_reqheight()
+        elif side == "t":
+            x = base_x
+            y = base_y - self.label.winfo_reqheight()
+        self.tip_window.wm_geometry(f"+{x}+{y}")
+        
+    def showtip(self, widget:tk.Widget, text:str, side:_side) -> None:
+        """
+        controls show portion of tooltip window.
+
+        Args:
+            widget (tk.Widget): the master of tooltip,
+            text (str): text on tooltip window.
+            side (_side): the side to show tooltip from the widget, 
+                          use `tl`, `tr`, `bl`, `br`, `t`, `b`; 
+                          `t` for top, `b` for bottom, `l` for left, `r` for right.
+        """
+        if self.tip_window.winfo_exists():
+            self.configtip(widget, text, side)
+            self.tip_window.deiconify()
+        else:
+            self.createtip()
+            self.configtip(widget, text, side)
+    
+    def hidetip(self) -> None:
+        "controls hide portion of tooltip window."
+        self.tip_window.withdraw()
+
+class TipManager():
+    """
+    this is a support component for ToolTip(), 
+    specific for large amount of tooltip in the same project,
+    with additional functionality of enable and disable all the tooltip.
+    
+    Example:
+     >>> import support_func as sf
+     >>> tip = sf.TipManager()
+     >>> tip.add_to_queue(widget_to_add_tooltip, 
+     >>>     text="text to show when hover over widget", 
+     >>> )
+     >>> ...
+     >>> tip.enable_all()
+    
+    """
+    def __init__(self) -> None:
+        self.widget_set = {}
+        self.toolTip = ToolTip()
+    
+    def add_to_queue(self, widget:tk.Widget, *, text:str, side:_side="br"):
+        """
+        add widget to queue of tooltip, enable tooltips with `enable_all()`.
+
+        Args:
+            widget (tk.Widget): the master of tooltip,
+            text (str): text on tooltip window.
+            side (_side): the side to show tooltip from the widget, 
+                          use `tl`, `tr`, `bl`, `br`, `t`, `b`; 
+                          `t` for top, `b` for bottom, `l` for left, `r` for right.
+                          Defaults to `br`, bottom right.
+        """
+        self.widget_set[widget.winfo_id()] = {
+            "widget":  widget, 
+            "text":  text, 
+            "side":  side, 
+            }
+    
+    def enable_all(self):
+        "enable tooltip for every widgets in queue."
+        for winfo_id in self.widget_set.keys():
+            widget = self.widget_set[winfo_id]["widget"]
+            widget.bind('<Enter>', self.__enter)
+            widget.bind('<Leave>', self.__leave)
+    
+    def disable_all(self):
+        "disable tooltip for every widgets in queue."
+        for winfo_id in self.widget_set.keys():
+            widget = self.widget_set[winfo_id]["widget"]
+            widget.unbind('<Enter>')
+            widget.unbind('<Leave>')
+    
+    def __enter(self, event):
+        "show tooltip when mouse hover."
+        winfo_id = event.widget.winfo_id()
+        widget = self.widget_set[winfo_id]["widget"]
+        text = self.widget_set[winfo_id]["text"]
+        side = self.widget_set[winfo_id]["side"]
+        self.toolTip.showtip(widget, text, side)
+                
+    def __leave(self, event):
+        "hide tooltip when mouse left."
+        self.toolTip.hidetip()
 
 def get_sysfont_sorted() -> dict[str, dict[str, str]]:
     """
