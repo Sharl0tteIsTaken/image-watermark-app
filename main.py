@@ -2334,19 +2334,20 @@ class WaterMarker():
         condition = []
         vaild = True
         if width <= 0:
-            condition.append(f"watermark width > {-w}")
+            condition.append(f"A) watermark width must > {-w}, value is set to minimum of {-w+1}.")
             vaild = False
-            self.usrntr_border_w.set(-w)
+            self.usrntr_border_w.set(-w+1)
         if height <= 0:
-            condition.append(f"watermark height > {-h}")
-            self.usrntr_border_h.set(-h)
+            condition.append(f"B) watermark height must > {-h}, value is set to minimum of {-h+1}.")
+            self.usrntr_border_h.set(-h+1)
             vaild = False
         if not vaild:
             messagebox.showwarning(
                 title="Invaild adjust value.", 
-                message=f"Watermark after adjustment have width and/or height < 1.\n In this case set: {' and '.join(condition)}."
+                message=f"Watermark after adjustment have width and/or height < 1.\n{'\n'.join(condition)}"
             )
             self.tplvl_advset.deiconify()
+            self.text_mark_maker()
         return vaild
     
     def adjust_value_validate(self) -> bool:
